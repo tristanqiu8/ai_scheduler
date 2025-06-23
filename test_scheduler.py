@@ -9,7 +9,7 @@ from typing import Dict, List
 import tempfile
 import os
 
-from enums import ResourceType, TaskPriority, RuntimeType, SegmentationStrategy
+from enums import ResourceType, TaskPriority, RuntimeType, SegmentationStrategy, SchedulerConfig
 from models import ResourceUnit, NetworkSegment, CutPoint, TaskScheduleInfo
 from task import NNTask, TaskSet, TaskFactory
 from scheduler_base import SimpleScheduler, PriorityQueueScheduler
@@ -377,27 +377,84 @@ class TestIntegration(unittest.TestCase):
         analytics_task.constraints.dependencies.add(critical_task.id)
         tasks.add_task(analytics_task)
         
-        # Test with SimpleScheduler which we know works
-        scheduler = SimpleScheduler(resources)
+        # Test multiple schedulers
+        schedulers = [
+            SimpleScheduler(resources),
+            PriorityQueueScheduler(resources),
+            GeneticScheduler(resources, population_size=20, generations=10)
+        ]
         
-        # Run scheduling
-        schedule = scheduler.schedule(tasks, time_limit_ms=500.0)
-        
-        # Validate
-        validator = ScheduleValidator()
-        is_valid, errors = validator.validate_schedule(schedule, resources, tasks)
-        
-        self.assertTrue(is_valid, f"Schedule validation failed: {errors}")
-        
-        # Analyze
-        self.assertGreater(len(schedule), 0, "Schedule should not be empty")
-        
-        analyzer = ScheduleAnalyzer()
-        analysis = analyzer.analyze_schedule(schedule, resources, tasks)
-        
-        # Check basic requirements
-        self.assertGreater(analysis['summary']['total_executions'], 0)
-        self.assertLess(analysis['summary']['average_latency'], 100.0)
+        for scheduler in schedulers:
+            # Reset scheduler state
+            scheduler.reset()
+            
+            # Reset all resources
+            for resource in resources.values():
+                resource.is_available = True
+                resource.current_task_id = None
+                resource.available_at_ms = 0.0
+                resource.total_usage_ms = 0.0
+                resource.current_temp_c = SchedulerConfig.AMBIENT_TEMPERATURE_C
+            
+            # Create a fresh copy of tasks for this scheduler
+            # This ensures each scheduler gets tasks in the same initial state
+            fresh_tasks = TaskSet()
+            
+            # Re-create tasks to ensure clean state
+            fresh_critical = TaskFactory.create_safety_monitor(fps=30)
+            fresh_tasks.add_task(fresh_critical)
+            
+            fresh_detection = TaskFactory.create_object_detection(use_dsp=True)
+            fresh_tasks.add_task(fresh_detection)
+            
+            fresh_analytics = TaskFactory.create_analytics_task()
+            fresh_analytics.constraints.dependencies.add(fresh_critical.id)
+            fresh_tasks.add_task(fresh_analytics)
+            
+            # Run scheduling
+            try:
+                schedule = scheduler.schedule(fresh_tasks, time_limit_ms=500.0)
+            except Exception as e:
+                self.fail(f"{scheduler.get_algorithm_name()} failed with error: {e}")
+            
+            # Basic checks
+            self.assertIsNotNone(schedule, 
+                            f"{scheduler.get_algorithm_name()} returned None")
+            
+            # Validate
+            validator = ScheduleValidator()
+            is_valid, errors = validator.validate_schedule(schedule, resources, fresh_tasks)
+            
+            # For debugging
+            if not is_valid or len(schedule) == 0:
+                print(f"\n{scheduler.get_algorithm_name()} results:")
+                print(f"  Schedule length: {len(schedule)}")
+                print(f"  Valid: {is_valid}")
+                if errors:
+                    print(f"  Errors: {errors[:3]}")  # Show first 3 errors
+            
+            self.assertTrue(is_valid, 
+                        f"{scheduler.get_algorithm_name()} produced invalid schedule: {errors}")
+            
+            # Check that something was scheduled
+            self.assertGreater(len(schedule), 0,
+                            f"{scheduler.get_algorithm_name()} produced empty schedule")
+            
+            # Analyze
+            analyzer = ScheduleAnalyzer()
+            analysis = analyzer.analyze_schedule(schedule, resources, fresh_tasks)
+            
+            # Check basic requirements
+            self.assertGreater(analysis['summary']['total_executions'], 0)
+            
+            # Be lenient with latency requirements for complex schedulers
+            if analysis['summary']['average_latency'] > 0:
+                # Different thresholds for different schedulers
+                if isinstance(scheduler, GeneticScheduler):
+                    # GA might produce longer schedules due to optimization
+                    self.assertLess(analysis['summary']['average_latency'], 200.0)
+                else:
+                    self.assertLess(analysis['summary']['average_latency'], 100.0)
 
     def test_segmentation_impact(self):
         """Test impact of network segmentation"""

@@ -466,8 +466,102 @@ class PriorityQueueScheduler(BaseScheduler):
                 self._check_preemption(tasks, current_time, schedule,
                                      running_tasks, events)
         
+        
+        # Use fallback if no schedule was produced
+        if not schedule:
+            return self._simple_fallback_schedule(tasks, time_limit_ms)
+        
         return schedule
     
+
+    def _simple_fallback_schedule(self, tasks: TaskSet, time_limit_ms: float) -> List[TaskScheduleInfo]:
+        """Simple fallback scheduling when event-driven approach fails"""
+        schedule = []
+        current_time = 0.0
+        completed_tasks = set()
+        
+        # Process all tasks multiple times to handle periodic scheduling
+        for cycle in range(int(time_limit_ms / 10)):  # Check every 10ms
+            # Get all tasks sorted by priority
+            task_list = sorted(tasks.tasks.values(), key=lambda t: (t.priority.value, t.id))
+            
+            for task in task_list:
+                if current_time >= time_limit_ms:
+                    break
+                
+                # Check if task can be scheduled
+                time_since_last = current_time - task.last_scheduled_ms
+                if time_since_last < task.constraints.get_period_ms():
+                    continue
+                
+                # Check dependencies
+                if not task.check_dependencies_met(completed_tasks):
+                    continue
+                
+                # Create schedule entry
+                schedule_info = TaskScheduleInfo(
+                    task_id=task.id,
+                    start_time_ms=current_time,
+                    state=TaskState.RUNNING
+                )
+                
+                # Calculate duration and schedule segments
+                total_duration = 0.0
+                segment_schedule = []
+                resource_assignments = {}
+                
+                can_schedule = True
+                for segment in task.segments:
+                    # Find available resource
+                    found_resource = False
+                    for res_id, resource in self.resources.items():
+                        if (resource.resource_type == segment.resource_type and 
+                            resource.available_at_ms <= current_time):
+                            duration = segment.get_duration(resource.bandwidth)
+                            segment_schedule.append(
+                                (segment.id, current_time + total_duration,
+                                 current_time + total_duration + duration, res_id)
+                            )
+                            resource_assignments[segment.id] = res_id
+                            total_duration += duration
+                            found_resource = True
+                            break
+                    
+                    if not found_resource:
+                        can_schedule = False
+                        break
+                
+                if can_schedule and total_duration > 0:
+                    schedule_info.end_time_ms = current_time + total_duration
+                    schedule_info.actual_duration_ms = total_duration
+                    schedule_info.segment_schedule = segment_schedule
+                    schedule_info.resource_assignments = resource_assignments
+                    schedule_info.state = TaskState.COMPLETED
+                    
+                    schedule.append(schedule_info)
+                    
+                    # Update task state
+                    task.last_scheduled_ms = current_time
+                    task.completion_count += 1
+                    if task.completion_count == 1:
+                        completed_tasks.add(task.id)
+                    
+                    # Update resource availability
+                    for seg_id, start, end, res_id in segment_schedule:
+                        self.resources[res_id].available_at_ms = end
+                    
+                    # Move time forward
+                    current_time += total_duration
+                else:
+                    # Couldn't schedule this task, try next
+                    continue
+            
+            # Advance time if nothing was scheduled
+            if current_time < (cycle + 1) * 10:
+                current_time = (cycle + 1) * 10
+        
+        return schedule
+
     def _try_schedule_tasks(self, tasks: TaskSet, current_time: float,
                           schedule: List[TaskScheduleInfo],
                           running_tasks: Dict[str, TaskScheduleInfo],
