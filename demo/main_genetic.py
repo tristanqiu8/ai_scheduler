@@ -5,6 +5,11 @@
 - 更合理的适应度函数
 - 更智能的变异策略
 """
+import sys
+import os
+# 添加父目录到系统路径，使其能找到core模块
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                                
 # 先导入枚举和基础类型
 from core.enums import TaskPriority, RuntimeType, SegmentationStrategy
 
