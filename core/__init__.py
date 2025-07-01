@@ -21,6 +21,15 @@ from .minimal_fifo_fix_corrected import apply_minimal_fifo_fix
 from .fixed_validation_and_metrics import validate_schedule_correctly, calculate_resource_utilization
 from .genetic_task_optimizer import GeneticTaskOptimizer, GeneticIndividual
 
+# 导入改进的优化器
+from .improved_genetic_optimizer import ImprovedGeneticOptimizer
+
+# 导入新的激进优化器（如果文件存在）
+try:
+    from .aggressive_idle_optimizer import AggressiveIdleOptimizer
+except ImportError:
+    AggressiveIdleOptimizer = None  # 文件还未创建时的fallback
+
 __all__ = [
     # Enums
     'ResourceType', 'TaskPriority', 'RuntimeType', 'SegmentationStrategy', 'CutPointStatus',
@@ -34,5 +43,7 @@ __all__ = [
     # Utilities
     'validate_schedule_correctly', 'calculate_resource_utilization',
     # Optimizers
-    'GeneticTaskOptimizer', 'GeneticIndividual'
+    'GeneticTaskOptimizer', 'GeneticIndividual',
+    'ImprovedGeneticOptimizer',
+    'AggressiveIdleOptimizer'  # 新增
 ]
