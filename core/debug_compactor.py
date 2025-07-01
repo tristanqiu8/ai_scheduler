@@ -13,7 +13,7 @@ import copy
 from collections import defaultdict
 
 from scheduler import MultiResourceScheduler
-from enums import ResourceType
+from .enums import ResourceType
 
 
 class DebugCompactor:

@@ -1,9 +1,9 @@
 from typing import List, Dict, Set, Optional, Dict, Set, Tuple
 from collections import defaultdict
-from enums import ResourceType, TaskPriority, RuntimeType, SegmentationStrategy
-from models import ResourceUnit, TaskScheduleInfo, ResourceBinding, SegmentationDecision, SubSegment
-from task import NNTask
-from priority_queue import ResourcePriorityQueues
+from core.enums import ResourceType, TaskPriority, RuntimeType, SegmentationStrategy
+from core.models import ResourceUnit, TaskScheduleInfo, ResourceBinding, SegmentationDecision, SubSegment
+from core.task import NNTask
+from core.priority_queue import ResourcePriorityQueues
 import numpy as np
 
 class MultiResourceScheduler:

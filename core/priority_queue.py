@@ -1,7 +1,7 @@
 from typing import Optional, Tuple, List, Dict
 from collections import deque
-from enums import TaskPriority
-from task import NNTask
+from .enums import TaskPriority
+from .task import NNTask
 
 class ResourcePriorityQueues:
     """Enhanced priority queues for a single resource with binding support and segmentation awareness"""

@@ -10,18 +10,18 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from scheduler import MultiResourceScheduler
+from core.scheduler import MultiResourceScheduler
 from scenario.real_task import create_real_tasks
-from modular_scheduler_fixes import apply_basic_fixes
-from genetic_task_optimizer import GeneticTaskOptimizer, GeneticIndividual
+from core.modular_scheduler_fixes import apply_basic_fixes
+from core.genetic_task_optimizer import GeneticTaskOptimizer, GeneticIndividual
 from viz.elegant_visualization import ElegantSchedulerVisualizer
-from fixed_validation_and_metrics import validate_schedule_correctly
+from core.fixed_validation_and_metrics import validate_schedule_correctly
 from collections import defaultdict
-from enums import TaskPriority
+from core.enums import TaskPriority
 
 # 导入资源冲突修复
-from minimal_fifo_fix_corrected import apply_minimal_fifo_fix
-from strict_resource_conflict_fix import apply_strict_resource_conflict_fix
+from core.minimal_fifo_fix_corrected import apply_minimal_fifo_fix
+from core.strict_resource_conflict_fix import apply_strict_resource_conflict_fix
 
 
 import matplotlib
@@ -448,16 +448,9 @@ def main():
     fix_manager = apply_basic_fixes(scheduler)
     
     # 应用额外的冲突解决修复（来自dragon4_with_smart_gap.py）
-    try:
-        from minimal_fifo_fix_corrected import apply_minimal_fifo_fix
-    except ImportError:
-        from minimal_fifo_fix import apply_minimal_fifo_fix
-    
-    try:
-        from strict_resource_conflict_fix import apply_strict_resource_conflict_fix
-    except ImportError:
-        print("⚠️ 无法导入strict_resource_conflict_fix")
-        pass
+    from minimal_fifo_fix_corrected import apply_minimal_fifo_fix
+
+    from strict_resource_conflict_fix import apply_strict_resource_conflict_fix
     
     # 创建任务
     tasks = create_real_tasks()
@@ -467,8 +460,7 @@ def main():
     # 应用FIFO和严格资源冲突修复
     apply_minimal_fifo_fix(scheduler)
     
-    if apply_strict_resource_conflict_fix:
-        apply_strict_resource_conflict_fix(scheduler)
+    apply_strict_resource_conflict_fix(scheduler)
     
     # 运行改进的优化
     optimizer, baseline_stats, optimized_stats, baseline_util, optimized_util = \

@@ -4,8 +4,8 @@ Enhanced neural network task class with custom segmentation as default
 """
 
 from typing import List, Dict, Set, Optional, Tuple
-from enums import ResourceType, TaskPriority, RuntimeType, SegmentationStrategy
-from models import ResourceSegment, TaskScheduleInfo, SubSegment, SegmentationDecision
+from core.enums import ResourceType, TaskPriority, RuntimeType, SegmentationStrategy
+from core.models import ResourceSegment, TaskScheduleInfo, SubSegment, SegmentationDecision
 
 class NNTask:
     """Enhanced neural network task class with custom segmentation as default"""

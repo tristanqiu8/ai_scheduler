@@ -6,7 +6,7 @@
 
 from typing import Dict, List, Optional, Set
 from collections import defaultdict
-from enums import ResourceType, TaskPriority
+from .enums import ResourceType, TaskPriority
 
 
 def apply_strict_resource_conflict_fix(scheduler):
@@ -176,9 +176,7 @@ def find_truly_available_resources(scheduler, task, current_time) -> Optional[Di
         found_resource = None
         
         # 遍历该类型的所有资源
-        print("a")
         for resource in scheduler.resources[res_type]:
-            print("b")
             resource_id = resource.unit_id
             
             # 计算任务在这个资源上的执行时间

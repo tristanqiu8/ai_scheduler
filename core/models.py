@@ -1,6 +1,6 @@
 from typing import Dict, Optional, Set, List, Tuple
 from dataclasses import dataclass, field
-from enums import ResourceType, RuntimeType, CutPointStatus
+from core.enums import ResourceType, RuntimeType, CutPointStatus
 
 @dataclass
 class CutPoint:
