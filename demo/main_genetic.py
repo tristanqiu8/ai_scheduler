@@ -5,11 +5,10 @@
 - 更合理的适应度函数
 - 更智能的变异策略
 """
+# 先导入枚举和基础类型
+from core.enums import TaskPriority, RuntimeType, SegmentationStrategy
 
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
+# 然后导入其他模块
 from core.improved_genetic_optimizer import (
     ImprovedGeneticOptimizer, 
     calculate_detailed_utilization,
@@ -23,15 +22,12 @@ from core.modular_scheduler_fixes import apply_basic_fixes
 from core.genetic_task_optimizer import GeneticIndividual
 from core.fixed_validation_and_metrics import validate_schedule_correctly
 from collections import defaultdict
-from core.enums import TaskPriority, RuntimeType, SegmentationStrategy
 from viz.elegant_visualization import ElegantSchedulerVisualizer
 import copy
 import random
 
 # 导入资源冲突修复
 from core.minimal_fifo_fix_corrected import apply_minimal_fifo_fix
-
-
 from core.strict_resource_conflict_fix import apply_strict_resource_conflict_fix
 
 import matplotlib

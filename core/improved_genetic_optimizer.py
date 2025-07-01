@@ -6,23 +6,22 @@
 - 改进适应度函数确保FPS不下降
 """
 
+
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from core.scheduler import MultiResourceScheduler
-from scenario.real_task import create_real_tasks
-from core.modular_scheduler_fixes import apply_basic_fixes
-from core.genetic_task_optimizer import GeneticTaskOptimizer, GeneticIndividual
-from viz.elegant_visualization import ElegantSchedulerVisualizer
-from core.fixed_validation_and_metrics import validate_schedule_correctly
+# 先导入枚举
+from .enums import TaskPriority, RuntimeType, SegmentationStrategy
+# 然后导入其他模块
+from .scheduler import MultiResourceScheduler
+from .task import NNTask
+from .genetic_task_optimizer import GeneticTaskOptimizer, GeneticIndividual
+from .fixed_validation_and_metrics import validate_schedule_correctly
+from .modular_scheduler_fixes import apply_basic_fixes
+from .minimal_fifo_fix_corrected import apply_minimal_fifo_fix
+from .strict_resource_conflict_fix import apply_strict_resource_conflict_fix
 from collections import defaultdict
-from core.enums import TaskPriority
-
-# 导入资源冲突修复
-from core.minimal_fifo_fix_corrected import apply_minimal_fifo_fix
-from core.strict_resource_conflict_fix import apply_strict_resource_conflict_fix
-
 
 import matplotlib
 matplotlib.use('Agg')

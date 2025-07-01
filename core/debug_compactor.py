@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import copy
 from collections import defaultdict
 
-from scheduler import MultiResourceScheduler
+from .scheduler import MultiResourceScheduler
 from .enums import ResourceType
 
 

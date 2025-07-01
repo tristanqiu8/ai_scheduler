@@ -14,20 +14,19 @@ from dataclasses import dataclass, field
 from collections import defaultdict
 import numpy as np
 
-# 添加当前目录到sys.path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 # 核心导入 (按照test文件的顺序)
-from scheduler import MultiResourceScheduler
-from task import NNTask
-from enums import ResourceType, TaskPriority, RuntimeType, SegmentationStrategy
-from scenario.real_task import create_real_tasks
-from models import SubSegment
+from .enums import ResourceType, TaskPriority, RuntimeType, SegmentationStrategy
+from .scheduler import MultiResourceScheduler
+from .task import NNTask
+from .models import SubSegment
 
 # 修复导入
-from modular_scheduler_fixes import apply_basic_fixes
-from fixed_validation_and_metrics import validate_schedule_correctly
-from collections import defaultdict
+from .modular_scheduler_fixes import apply_basic_fixes
+from .fixed_validation_and_metrics import validate_schedule_correctly
+
+# 场景导入 - 需要使用绝对路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from scenario.real_task import create_real_tasks
 
 # 可视化导入
 from viz.elegant_visualization import ElegantSchedulerVisualizer

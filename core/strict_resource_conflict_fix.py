@@ -235,7 +235,7 @@ def create_schedule_and_occupy_resources(scheduler, task, assigned_resources, cu
             actual_end = max(actual_end, sub_seg_end)
     
     # 创建调度信息
-    from models import TaskScheduleInfo
+    from .models import TaskScheduleInfo
     schedule_info = TaskScheduleInfo(
         task_id=task.task_id,
         start_time=actual_start,
