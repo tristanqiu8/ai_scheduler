@@ -60,7 +60,8 @@ class AggressiveIdleOptimizer(GeneticTaskOptimizer):
         # 新增参数
         self.aggressive_mutation_rate = 0.6  # 激进变异率
         self.chaos_injection_rate = 0.1      # 混沌注入率
-        self.fps_tolerance = 0.85            # FPS容忍度（85%）
+        self.fps_tolerance = 0.90            # FPS容忍度（修改为95%）
+        self.low_fps_tolerance = 0.85        # 低FPS任务的容忍度
         
         # 基线性能
         self.baseline_performance = None
@@ -114,7 +115,7 @@ class AggressiveIdleOptimizer(GeneticTaskOptimizer):
         return npu_util, dsp_util
         
     def _evaluate_fitness_for_idle(self, individual: GeneticIndividual) -> float:
-        """针对空闲时间优化的适应度函数"""
+        """针对空闲时间优化的适应度函数 - 更激进版本"""
         # 应用配置
         self._apply_individual_config(individual)
         
@@ -141,6 +142,8 @@ class AggressiveIdleOptimizer(GeneticTaskOptimizer):
             # FPS分析
             total_fps_satisfaction = 0.0
             critical_fps_violation = False
+            low_fps_tasks_satisfied = 0
+            high_fps_tasks_satisfied = 0
             
             for task in self.tasks:
                 count = task_counts[task.task_id]
@@ -150,53 +153,68 @@ class AggressiveIdleOptimizer(GeneticTaskOptimizer):
                     fps_rate = count / expected
                     total_fps_satisfaction += fps_rate
                     
-                    # 关键任务的FPS检查
-                    if task.priority == TaskPriority.CRITICAL and fps_rate < self.fps_tolerance:
-                        critical_fps_violation = True
+                    # 检查低FPS任务（使用低容忍度）
+                    if task.fps_requirement <= 10:
+                        if fps_rate >= self.low_fps_tolerance:
+                            low_fps_tasks_satisfied += 1
+                    
+                    # 检查高FPS任务（使用正常容忍度）
+                    if task.fps_requirement >= 25:
+                        if fps_rate >= self.fps_tolerance:
+                            high_fps_tasks_satisfied += 1
+                        elif task.priority == TaskPriority.CRITICAL and fps_rate < self.fps_tolerance * 0.9:
+                            critical_fps_violation = True
             
             individual.fps_satisfaction_rate = total_fps_satisfaction / len(self.tasks)
             
-            # 计算资源利用率
-            npu_util, dsp_util = self._calculate_separate_utilization()
-            individual.resource_utilization = (npu_util + dsp_util) / 2
-            
-            # 新的适应度计算 - 专注于空闲时间
+            # 新的激进适应度计算
             fitness = 0.0
             
-            # 1. 空闲时间是最重要的指标（权重最高）
-            fitness += idle_time * 10.0  # 每ms空闲时间10分
+            # 1. 空闲时间是绝对主导因素（权重大幅提高）
+            fitness += idle_time * 50.0  # 从10提高到50
             
-            # 2. 基本的冲突惩罚
+            # 2. 对比基线的空闲时间改进
+            if self.baseline_performance and 'baseline_idle' in self.baseline_performance:
+                idle_improvement = idle_time - self.baseline_performance['baseline_idle']
+                if idle_improvement > 0:
+                    fitness += idle_improvement * 100  # 每ms改进100分
+                else:
+                    fitness += idle_improvement * 20   # 退化的惩罚较轻
+            
+            # 3. 冲突惩罚（降低权重）
             if individual.conflict_count > 0:
-                fitness -= individual.conflict_count * 100
+                fitness -= individual.conflict_count * 50  # 从100降到50
             
-            # 3. FPS要求（放宽标准）
+            # 4. FPS要求（使用配置的容忍度）
             if individual.fps_satisfaction_rate >= self.fps_tolerance:
-                fitness += 200  # 满足基本要求即可
+                fitness += 300  # 满足FPS要求的奖励
             else:
-                # 低于容忍度的惩罚
-                fps_penalty = (self.fps_tolerance - individual.fps_satisfaction_rate) * 500
+                # 根据差距计算惩罚
+                fps_gap = self.fps_tolerance - individual.fps_satisfaction_rate
+                fps_penalty = fps_gap * 1000  # 加大惩罚力度
                 fitness -= fps_penalty
             
-            # 4. 关键任务惩罚
-            if critical_fps_violation:
-                fitness -= 300
-            
-            # 5. 资源利用率奖励（鼓励高效利用）
-            if individual.resource_utilization > 0.8:
-                fitness += 100
-            
-            # 6. 任务优先级合理性
-            priority_bonus = 0
+            # 5. 激励牺牲低优先级任务
             for task in self.tasks:
-                # 低优先级任务降级奖励
-                if task.fps_requirement <= 10 and individual.task_priorities.get(task.task_id) == TaskPriority.LOW:
-                    priority_bonus += 20
-                # 高FPS任务保持高优先级
-                elif task.fps_requirement >= 25 and individual.task_priorities.get(task.task_id) in [TaskPriority.CRITICAL, TaskPriority.HIGH]:
-                    priority_bonus += 10
-            fitness += priority_bonus
+                task_id = task.task_id
+                count = task_counts.get(task_id, 0)
+                expected = int((self.time_window / 1000.0) * task.fps_requirement)
+                
+                # 如果低FPS任务执行次数减少但仍满足低容忍度，奖励
+                if task.fps_requirement <= 10 and expected > 0:
+                    fps_rate = count / expected
+                    if fps_rate >= self.low_fps_tolerance and fps_rate < 1.0:
+                        fitness += 20
+                
+                # 如果低优先级任务被降级，奖励
+                if individual.task_priorities.get(task_id) == TaskPriority.LOW:
+                    if task.fps_requirement <= 10:
+                        fitness += 30
             
+            # 6. 不要过度惩罚关键任务违规
+            if critical_fps_violation:
+                fitness -= 200  # 适度惩罚
+                
         except Exception as e:
             print(f"评估失败: {e}")
             fitness = -10000.0
@@ -206,52 +224,136 @@ class AggressiveIdleOptimizer(GeneticTaskOptimizer):
         return fitness
     
     def _estimate_idle_time(self) -> float:
-        """估算紧凑化后的空闲时间"""
+        """实际运行紧凑化来测量空闲时间"""
         if not self.scheduler.schedule_history:
             return self.time_window
         
-        # 简单估算：找到第一个时间窗口内的最后一个事件
-        first_window_events = [e for e in self.scheduler.schedule_history 
-                              if e.start_time < self.time_window]
-        
-        if not first_window_events:
-            return self.time_window
-        
-        # 按结束时间排序
-        last_end = max(e.end_time for e in first_window_events)
-        
-        # 计算总的资源占用时间（考虑并行）
-        resource_timelines = defaultdict(list)
-        for event in first_window_events:
-            for res_type, res_id in event.assigned_resources.items():
-                resource_timelines[res_id].append((event.start_time, event.end_time))
-        
-        # 合并重叠时间段
-        max_resource_end = 0
-        for res_id, timeline in resource_timelines.items():
-            if not timeline:
-                continue
+        # 导入紧凑化器
+        try:
+            from .debug_compactor import DebugCompactor
+        except ImportError:
+            # 如果无法导入，使用简单估算
+            first_window_events = [e for e in self.scheduler.schedule_history 
+                                  if e.start_time < self.time_window]
+            if not first_window_events:
+                return self.time_window
             
-            # 排序并合并
-            timeline.sort()
-            merged_end = 0
-            current_start, current_end = timeline[0]
+            # 计算实际占用时间
+            total_busy = 0
+            for event in first_window_events:
+                total_busy += (event.end_time - event.start_time)
             
-            for start, end in timeline[1:]:
-                if start <= current_end:
-                    current_end = max(current_end, end)
+            # 粗略估算：假设可以压缩掉30%的空隙
+            return self.time_window - total_busy * 0.7
+        
+        # 使用实际的紧凑化器
+        import copy
+        original_history = copy.deepcopy(self.scheduler.schedule_history)
+        
+        compactor = DebugCompactor(self.scheduler, self.time_window)
+        try:
+            _, idle_time = compactor.simple_compact()
+            # 恢复原始历史
+            self.scheduler.schedule_history = original_history
+            return idle_time
+        except:
+            # 如果紧凑化失败，返回保守估计
+            self.scheduler.schedule_history = original_history
+            return 0.0
+    
+    def _create_extreme_individual(self) -> GeneticIndividual:
+        """创建极端的个体 - 最大化空闲时间"""
+        individual = GeneticIndividual()
+        
+        for task in self.tasks:
+            task_id = task.task_id
+            
+            # 极端策略1：所有低FPS任务都降为最低优先级
+            if task.fps_requirement <= 10:
+                individual.task_priorities[task_id] = TaskPriority.LOW
+            # 极端策略2：只有最高FPS的任务保持高优先级
+            elif task.fps_requirement >= 50:
+                individual.task_priorities[task_id] = TaskPriority.CRITICAL
+            else:
+                # 其他任务随机低优先级
+                individual.task_priorities[task_id] = random.choice([
+                    TaskPriority.LOW, TaskPriority.NORMAL
+                ])
+            
+            # 极端的运行时分配
+            if random.random() < 0.5:
+                # 50%概率使用"错误"的运行时
+                if task.uses_dsp:
+                    individual.task_runtime_types[task_id] = RuntimeType.ACPU_RUNTIME
                 else:
-                    merged_end = max(merged_end, current_end)
-                    current_start, current_end = start, end
+                    individual.task_runtime_types[task_id] = RuntimeType.DSP_RUNTIME
+            else:
+                individual.task_runtime_types[task_id] = random.choice(self.runtime_options)
             
-            merged_end = max(merged_end, current_end)
-            max_resource_end = max(max_resource_end, merged_end)
-        
-        # 估算紧凑化后的空闲时间
-        estimated_idle = self.time_window - max_resource_end
-        return max(0, estimated_idle)
+            # 激进的分段策略
+            if task_id in ["T2", "T3"]:
+                # YOLO任务强制分段
+                individual.task_segmentation_strategies[task_id] = SegmentationStrategy.FORCED_SEGMENTATION
+            else:
+                # 随机极端策略
+                individual.task_segmentation_strategies[task_id] = random.choice([
+                    SegmentationStrategy.NO_SEGMENTATION,
+                    SegmentationStrategy.FORCED_SEGMENTATION
+                ])
+            
+            individual.task_segmentation_configs[task_id] = random.randint(0, 4)
+            
+        return individual
     
     def _create_random_aggressive_individual(self) -> GeneticIndividual:
+        """创建更激进的随机个体"""
+        individual = GeneticIndividual()
+        
+        for task in self.tasks:
+            task_id = task.task_id
+            
+            # 更激进的优先级分配
+            if task.fps_requirement <= 5:
+                # 低FPS任务大概率降级
+                individual.task_priorities[task_id] = random.choice([
+                    TaskPriority.LOW, TaskPriority.LOW, TaskPriority.NORMAL
+                ])
+            elif task.fps_requirement >= 25:
+                # 高FPS任务倾向高优先级
+                individual.task_priorities[task_id] = random.choice([
+                    TaskPriority.HIGH, TaskPriority.CRITICAL, TaskPriority.NORMAL
+                ])
+            else:
+                # 中等任务随机
+                individual.task_priorities[task_id] = random.choice(self.priority_options)
+            
+            # 运行时类型 - 更多变化
+            if random.random() < 0.3:  # 30%概率违反常规
+                individual.task_runtime_types[task_id] = random.choice(self.runtime_options)
+            else:
+                # 70%概率合理选择
+                if task.uses_dsp:
+                    individual.task_runtime_types[task_id] = RuntimeType.DSP_RUNTIME
+                else:
+                    individual.task_runtime_types[task_id] = RuntimeType.ACPU_RUNTIME
+            
+            # 分段策略 - 更激进
+            if task_id in ["T2", "T3"]:  # YOLO任务
+                individual.task_segmentation_strategies[task_id] = random.choice([
+                    SegmentationStrategy.ADAPTIVE_SEGMENTATION,
+                    SegmentationStrategy.FORCED_SEGMENTATION,  # 强制分段
+                    SegmentationStrategy.CUSTOM_SEGMENTATION
+                ])
+            else:
+                individual.task_segmentation_strategies[task_id] = random.choice([
+                    SegmentationStrategy.NO_SEGMENTATION,
+                    SegmentationStrategy.ADAPTIVE_SEGMENTATION
+                ])
+            
+            # 分段配置
+            individual.task_segmentation_configs[task_id] = random.randint(0, 4)
+            
+        return individual
         """创建更激进的随机个体"""
         individual = GeneticIndividual()
         
@@ -327,7 +429,7 @@ class AggressiveIdleOptimizer(GeneticTaskOptimizer):
                 individual.task_segmentation_configs[task_id] = random.randint(0, 4)
     
     def optimize_for_idle_time(self):
-        """针对空闲时间的优化"""
+        """针对空闲时间的优化 - 更激进版本"""
         print("\n🚀 启动激进空闲时间优化")
         print("=" * 60)
         print(f"种群大小: {self.population_size}")
@@ -339,64 +441,118 @@ class AggressiveIdleOptimizer(GeneticTaskOptimizer):
         # 初始化种群
         population = []
         
-        # 1. 添加原始配置
+        # 保存所有满足FPS要求的个体
+        self.fps_compliant_individuals = []
+        
+        # 1. 添加原始配置并记录基线空闲时间
         original = copy.deepcopy(self.original_config)
         self._evaluate_fitness = self._evaluate_fitness_for_idle
         self._evaluate_fitness(original)
         population.append(original)
+        
+        # 记录基线空闲时间用于比较
+        if self.baseline_performance:
+            self.baseline_performance['baseline_idle'] = original.idle_time
         print(f"\n原始配置空闲时间: {original.idle_time:.1f}ms")
         
-        # 2. 添加多样化的个体
-        while len(population) < self.population_size:
-            if random.random() < 0.7:  # 70%激进个体
-                individual = self._create_random_aggressive_individual()
-            else:  # 30%智能个体
-                individual = self._create_intelligent_individual()
+        # 检查原始配置是否满足FPS要求
+        if original.fps_satisfaction_rate >= self.fps_tolerance:
+            self.fps_compliant_individuals.append(copy.deepcopy(original))
+            print(f"  ✓ 原始配置满足FPS要求 ({original.fps_satisfaction_rate:.1%})")
+        
+        # 2. 添加极端个体（专门为最大化空闲时间设计）
+        print("创建极端个体...")
+        for i in range(20):  # 20%极端个体
+            extreme = self._create_extreme_individual()
+            self._evaluate_fitness(extreme)
+            population.append(extreme)
+            if extreme.idle_time > original.idle_time:
+                print(f"  极端个体{i}: 空闲时间={extreme.idle_time:.1f}ms")
+            # 检查是否满足FPS要求
+            if extreme.fps_satisfaction_rate >= self.fps_tolerance:
+                self.fps_compliant_individuals.append(copy.deepcopy(extreme))
+        
+        # 3. 添加激进个体
+        while len(population) < self.population_size * 0.8:
+            individual = self._create_random_aggressive_individual()
             self._evaluate_fitness(individual)
             population.append(individual)
+            # 检查是否满足FPS要求
+            if individual.fps_satisfaction_rate >= self.fps_tolerance:
+                self.fps_compliant_individuals.append(copy.deepcopy(individual))
+        
+        # 4. 添加一些智能个体
+        while len(population) < self.population_size:
+            individual = self._create_intelligent_individual()
+            # 但是要修改使其更激进
+            for task in self.tasks:
+                if task.fps_requirement <= 10 and random.random() < 0.7:
+                    individual.task_priorities[task.task_id] = TaskPriority.LOW
+            self._evaluate_fitness(individual)
+            population.append(individual)
+            # 检查是否满足FPS要求
+            if individual.fps_satisfaction_rate >= self.fps_tolerance:
+                self.fps_compliant_individuals.append(copy.deepcopy(individual))
         
         # 排序
         population.sort(key=lambda x: x.fitness, reverse=True)
         self.best_individual = population[0]
         
-        print(f"\n初始最佳:")
+        # 找出满足FPS要求的最佳个体
+        if self.fps_compliant_individuals:
+            self.best_fps_compliant = max(self.fps_compliant_individuals, key=lambda x: x.idle_time)
+            print(f"\n初始最佳（满足FPS）:")
+            print(f"  空闲时间: {self.best_fps_compliant.idle_time:.1f}ms")
+            print(f"  FPS满足率: {self.best_fps_compliant.fps_satisfaction_rate:.1%}")
+        else:
+            self.best_fps_compliant = None
+            print("\n⚠️ 警告：初始种群中没有满足FPS要求的个体")
+        
+        print(f"\n初始最佳（总体）:")
         print(f"  适应度: {self.best_individual.fitness:.2f}")
         print(f"  空闲时间: {self.best_individual.idle_time:.1f}ms")
         print(f"  FPS满足率: {self.best_individual.fps_satisfaction_rate:.1%}")
         
         # 进化过程
         best_idle_time = self.best_individual.idle_time
+        best_compliant_idle_time = self.best_fps_compliant.idle_time if self.best_fps_compliant else 0
         stagnation_counter = 0
         
         for generation in range(self.generations):
-            # 精英保留
+            # 精英保留（但更少）
             new_population = population[:self.elite_size]
             
             # 生成新个体
             while len(new_population) < self.population_size:
-                # 多样化选择策略
-                if random.random() < 0.7:
-                    # 标准交叉变异
-                    parent1 = self._tournament_selection(population, tournament_size=3)
-                    parent2 = self._tournament_selection(population, tournament_size=3)
+                strategy = random.random()
+                
+                if strategy < 0.3:  # 30% 极端个体
+                    new_individual = self._create_extreme_individual()
+                elif strategy < 0.6:  # 30% 交叉变异
+                    parent1 = self._tournament_selection(population[:20], tournament_size=2)
+                    parent2 = self._tournament_selection(population[:20], tournament_size=2)
                     
                     child1, child2 = self._crossover(parent1, parent2)
                     self._aggressive_mutate(child1)
                     self._aggressive_mutate(child2)
                     
                     new_population.extend([child1, child2])
-                else:
-                    # 创建全新的激进个体
+                    continue
+                else:  # 40% 新的激进个体
                     new_individual = self._create_random_aggressive_individual()
-                    new_population.append(new_individual)
+                
+                new_population.append(new_individual)
             
             # 评估新个体
             for ind in new_population[self.elite_size:]:
                 self._evaluate_fitness(ind)
+                # 检查是否满足FPS要求
+                if ind.fps_satisfaction_rate >= self.fps_tolerance:
+                    self.fps_compliant_individuals.append(copy.deepcopy(ind))
             
             # 更新种群
             population = new_population[:self.population_size]
-            population.sort(key=lambda x: x.fitness, reverse=True)
+            population.sort(key=lambda x: x.idle_time, reverse=True)  # 按空闲时间排序！
             
             # 检查改进
             current_best = population[0]
@@ -404,38 +560,68 @@ class AggressiveIdleOptimizer(GeneticTaskOptimizer):
                 best_idle_time = current_best.idle_time
                 self.best_individual = current_best
                 stagnation_counter = 0
-                print(f"\n✨ 第{generation}代发现更好解: 空闲时间={best_idle_time:.1f}ms")
+                print(f"\n✨ 第{generation}代发现更好解: 空闲时间={best_idle_time:.1f}ms (FPS={current_best.fps_satisfaction_rate:.1%})")
             else:
                 stagnation_counter += 1
             
+            # 检查满足FPS要求的最佳个体
+            if self.fps_compliant_individuals:
+                current_best_compliant = max(self.fps_compliant_individuals, key=lambda x: x.idle_time)
+                if current_best_compliant.idle_time > best_compliant_idle_time:
+                    best_compliant_idle_time = current_best_compliant.idle_time
+                    self.best_fps_compliant = current_best_compliant
+                    print(f"  ✅ 满足FPS要求的新最佳: 空闲时间={best_compliant_idle_time:.1f}ms")
+            
             # 定期报告
-            if generation % 20 == 0:
-                avg_idle = sum(ind.idle_time for ind in population[:10]) / 10
+            if generation % 10 == 0:
+                top_idle = [ind.idle_time for ind in population[:10]]
+                avg_idle = sum(top_idle) / len(top_idle)
+                max_idle = max(top_idle)
+                compliant_count = len([ind for ind in population if ind.fps_satisfaction_rate >= self.fps_tolerance])
+                
                 print(f"\n第{generation}代:")
                 print(f"  最佳空闲时间: {self.best_individual.idle_time:.1f}ms")
-                print(f"  平均空闲时间(top10): {avg_idle:.1f}ms")
+                print(f"  Top10平均: {avg_idle:.1f}ms, 最大: {max_idle:.1f}ms")
                 print(f"  最佳FPS满足率: {self.best_individual.fps_satisfaction_rate:.1%}")
+                print(f"  满足FPS要求的个体数: {compliant_count}/{self.population_size}")
+                if self.best_fps_compliant:
+                    print(f"  满足FPS的最佳空闲时间: {self.best_fps_compliant.idle_time:.1f}ms")
                 print(f"  停滞计数: {stagnation_counter}")
             
-            # 停滞处理
-            if stagnation_counter > 30:
-                print(f"\n💉 注入新血液（停滞{stagnation_counter}代）")
-                # 替换部分种群
-                for i in range(self.population_size // 3, self.population_size):
-                    population[i] = self._create_random_aggressive_individual()
+            # 停滞处理 - 更激进
+            if stagnation_counter > 20:  # 更快注入新血
+                print(f"\n💉 激进注入新血液（停滞{stagnation_counter}代）")
+                # 保留最好的几个，其余全部替换为极端个体
+                for i in range(3, self.population_size):
+                    if i % 2 == 0:
+                        population[i] = self._create_extreme_individual()
+                    else:
+                        population[i] = self._create_random_aggressive_individual()
                     self._evaluate_fitness(population[i])
+                    # 检查是否满足FPS要求
+                    if population[i].fps_satisfaction_rate >= self.fps_tolerance:
+                        self.fps_compliant_individuals.append(copy.deepcopy(population[i]))
                 stagnation_counter = 0
             
             # 提前停止条件
-            if best_idle_time > self.time_window * 0.3:  # 30%空闲已经很好
-                print(f"\n🎯 达到优秀解（空闲时间>{self.time_window * 0.3:.1f}ms），提前停止")
+            if self.best_fps_compliant and self.best_fps_compliant.idle_time > self.time_window * 0.4:  # 40%空闲
+                print(f"\n🎯 达到优秀解（满足FPS的空闲时间>{self.time_window * 0.4:.1f}ms），提前停止")
                 break
+        
+        # 选择最终结果：优先选择满足FPS要求的最佳个体
+        if self.best_fps_compliant:
+            print(f"\n✅ 找到满足FPS要求的最佳解")
+            self.best_individual = self.best_fps_compliant
+        else:
+            print(f"\n⚠️ 警告：没有找到满足FPS要求（{self.fps_tolerance*100}%）的解，返回最佳空闲时间解")
         
         # 应用最佳配置
         self._apply_individual_config(self.best_individual)
         
         print(f"\n🏁 优化完成!")
         print(f"最终最佳空闲时间: {self.best_individual.idle_time:.1f}ms ({self.best_individual.idle_time/self.time_window*100:.1f}%)")
+        print(f"最终FPS满足率: {self.best_individual.fps_satisfaction_rate:.1%}")
+        print(f"是否满足FPS要求: {'✅ 是' if self.best_individual.fps_satisfaction_rate >= self.fps_tolerance else '❌ 否'}")
         
         return self.best_individual
     

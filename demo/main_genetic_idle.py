@@ -8,13 +8,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 导入新的优化器
-try:
-    from core.aggressive_idle_optimizer import AggressiveIdleOptimizer
-except ImportError:
-    # 如果正常导入失败，尝试直接导入
-    print("警告：无法从core包导入AggressiveIdleOptimizer，尝试直接导入...")
-    sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'core'))
-    from aggressive_idle_optimizer import AggressiveIdleOptimizer
+from core.aggressive_idle_optimizer import AggressiveIdleOptimizer
 from core.scheduler import MultiResourceScheduler
 from scenario.real_task import create_real_tasks
 from core.modular_scheduler_fixes import apply_basic_fixes
@@ -158,6 +152,16 @@ def main():
     # 创建激进优化器
     optimizer = AggressiveIdleOptimizer(scheduler, tasks, time_window)
     optimizer.set_baseline_performance(baseline_stats, len(baseline_conflicts))
+    
+    # 可以在这里调整FPS容忍度
+    # optimizer.fps_tolerance = 0.90  # 例如：设为90%
+    # optimizer.low_fps_tolerance = 0.80  # 低FPS任务的容忍度
+    
+    print(f"\n⚙️  优化器配置:")
+    print(f"  - FPS容忍度: {optimizer.fps_tolerance * 100}%")
+    print(f"  - 低FPS任务容忍度: {optimizer.low_fps_tolerance * 100}%")
+    print(f"  - 种群大小: {optimizer.population_size}")
+    print(f"  - 进化代数: {optimizer.generations}")
     
     # 运行激进优化
     best_individual = optimizer.optimize_for_idle_time()
