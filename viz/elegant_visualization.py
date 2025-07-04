@@ -510,13 +510,14 @@ class ElegantSchedulerVisualizer:
                     "args": {"name": resource.unit_id}
                 })
         
-        # Add tasks
+        # Add tasks - 修复：避免重复
         for schedule in self.scheduler.schedule_history:
             task = self.scheduler.tasks[schedule.task_id]
             
             if task.is_segmented and schedule.sub_segment_schedule:
-                # Segmented task
+                # 分段任务：为每个子段创建单独的事件
                 for i, (sub_seg_id, start_time, end_time) in enumerate(schedule.sub_segment_schedule):
+                    # 找到子段对应的资源类型
                     sub_seg = None
                     for ss in task.get_sub_segments_for_scheduling():
                         if ss.sub_id == sub_seg_id:
@@ -528,7 +529,7 @@ class ElegantSchedulerVisualizer:
                         if resource_id in resource_mapping:
                             pid, tid = resource_mapping[resource_id]
                             
-                            # Task name with segment info
+                            # 任务名称包含段信息
                             name = self._get_dragon4_task_name(task, i, len(schedule.sub_segment_schedule))
                             
                             events.append({
@@ -546,35 +547,48 @@ class ElegantSchedulerVisualizer:
                                 }
                             })
             else:
-                # Regular task
+                # 非分段任务：为每个资源段创建事件
+                # 收集该任务在不同资源上的执行段
+                resource_segments = []
+                
                 for seg in task.segments:
                     if seg.resource_type in schedule.assigned_resources:
                         resource_id = schedule.assigned_resources[seg.resource_type]
                         if resource_id in resource_mapping:
-                            pid, tid = resource_mapping[resource_id]
-                            
                             resource_unit = next((r for r in self.scheduler.resources[seg.resource_type] 
                                                 if r.unit_id == resource_id), None)
                             if resource_unit:
                                 duration = seg.get_duration(resource_unit.bandwidth)
                                 start_time = schedule.start_time + seg.start_time
-                                
-                                name = self._get_dragon4_task_name(task)
-                                
-                                events.append({
-                                    "name": name,
-                                    "cat": task.priority.name,
-                                    "ph": "X",
-                                    "ts": int(start_time * 1000),
-                                    "dur": int(duration * 1000),
-                                    "pid": pid,
-                                    "tid": tid,
-                                    "args": {
-                                        "priority": task.priority.name,
-                                        "fps": task.fps_requirement,
-                                        "latency_req": task.latency_requirement
-                                    }
+                                resource_segments.append({
+                                    'resource_id': resource_id,
+                                    'resource_type': seg.resource_type,
+                                    'start_time': start_time,
+                                    'duration': duration,
+                                    'segment_id': seg.segment_id
                                 })
+                
+                # 为每个资源段创建一个事件
+                for seg_info in resource_segments:
+                    pid, tid = resource_mapping[seg_info['resource_id']]
+                    
+                    name = self._get_dragon4_task_name(task)
+                    
+                    events.append({
+                        "name": name,
+                        "cat": task.priority.name,
+                        "ph": "X",
+                        "ts": int(seg_info['start_time'] * 1000),
+                        "dur": int(seg_info['duration'] * 1000),
+                        "pid": pid,
+                        "tid": tid,
+                        "args": {
+                            "priority": task.priority.name,
+                            "fps": task.fps_requirement,
+                            "latency_req": task.latency_requirement,
+                            "segment": seg_info['segment_id']
+                        }
+                    })
         
         # Write to file
         with open(filename, 'w') as f:
