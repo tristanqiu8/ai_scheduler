@@ -7,7 +7,7 @@ def create_real_tasks():
     tasks = []
     
     print("\n📋 创建测试任务:")
-    seg_overhead = 0.15  # 分段开销比例
+    seg_overhead = 0  # 分段开销比例
     # 任务1: cnntk_template
     task1 = NNTask("T1", "MOTR",
                    priority=TaskPriority.CRITICAL,
