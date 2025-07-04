@@ -1,362 +1,214 @@
 #!/usr/bin/env python3
 """
-空隙感知优化器 - 贪心算法版本
-基于无冲突的原始调度，逐个将NPU段插入前面的空隙
+调试版空隙优化器 - 一步步解决问题
 """
 
-from typing import List, Dict, Tuple, Optional, Set
-from collections import defaultdict
+from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 import copy
 
-from .enums import ResourceType, TaskPriority
-from .task import NNTask
-from .models import TaskScheduleInfo, SubSegment
+from .enums import ResourceType
+from .models import TaskScheduleInfo
 from .scheduler import MultiResourceScheduler
 
 
-@dataclass
-class ResourceGap:
-    """资源空隙定义"""
-    resource_id: str
-    resource_type: ResourceType
-    start_time: float
-    end_time: float
-    duration: float
-
-
-@dataclass 
-class SegmentCandidate:
-    """待优化的段候选"""
-    task_id: str
-    task: NNTask
-    segment: SubSegment
-    original_start: float
-    original_end: float
-    event_index: int  # 原始调度中的事件索引
-
-
 class GapAwareOptimizer:
-    """空隙感知优化器 - 贪心算法实现"""
+    """调试版空隙优化器"""
     
     def __init__(self, scheduler: MultiResourceScheduler):
         self.scheduler = scheduler
-        self.original_schedule = None  # 保存原始调度
+        self.original_schedule = None
         
     def optimize_schedule(self, time_window: float = 100.0) -> List[TaskScheduleInfo]:
-        """使用贪心算法优化调度"""
-        print("\n🔍 执行贪心空隙优化...")
+        """优化调度"""
+        print("\n🔍 执行调试版空隙优化...")
         
-        # 1. 保存原始调度作为基准
+        # 1. 保存原始调度
         self.original_schedule = copy.deepcopy(self.scheduler.schedule_history)
-        print(f"  原始调度事件数: {len(self.original_schedule)}")
+        print(f"\n原始调度分析:")
+        print(f"  事件总数: {len(self.original_schedule)}")
         
-        # 2. 收集所有可移动的NPU段（按时间顺序）
-        npu_segments = self._collect_npu_segments()
-        print(f"  找到 {len(npu_segments)} 个NPU段")
+        # 打印每个事件的详细信息
+        for idx, event in enumerate(self.original_schedule):
+            print(f"\n  事件{idx}: 任务{event.task_id}")
+            if hasattr(event, 'sub_segment_schedule'):
+                for sub_id, start, end in event.sub_segment_schedule:
+                    # 判断资源类型
+                    res_type = self._get_resource_type_for_segment(event.task_id, sub_id)
+                    print(f"    {sub_id}: {start:.1f}-{end:.1f}ms ({res_type})")
         
-        # 3. 初始化工作调度（复制原始调度）
-        working_schedule = copy.deepcopy(self.original_schedule)
+        # 2. 找出NPU空隙
+        print("\n分析NPU空隙:")
+        npu_gaps = self._find_npu_gaps()
         
-        # 4. 贪心算法：逐个尝试将段插入更早的位置
-        optimized_count = 0
-        for candidate in npu_segments:
-            print(f"\n  处理: {candidate.task_id}.{candidate.segment.sub_id} "
-                  f"@ {candidate.original_start:.1f}ms")
-            
-            # 寻找可用的空隙
-            best_gap = self._find_best_gap_for_segment(
-                candidate, 
-                working_schedule, 
-                time_window
-            )
-            
-            if best_gap and best_gap['new_start'] < candidate.original_start - 0.01:
-                # 执行移动
-                print(f"    ✓ 移动到 {best_gap['new_start']:.1f}ms (提前 "
-                      f"{candidate.original_start - best_gap['new_start']:.1f}ms)")
-                
-                working_schedule = self._move_segment(
-                    working_schedule,
-                    candidate,
-                    best_gap
-                )
-                optimized_count += 1
-                
-                # 级联移动：将后续的所有事件向前压缩
-                working_schedule = self._cascade_compress(working_schedule, time_window)
-            else:
-                print(f"    ✗ 无法优化")
+        # 3. 找出可移动的B段
+        print("\n分析可移动的段:")
+        movable_segments = self._find_movable_segments()
         
-        # 5. 更新调度器的调度历史
-        self.scheduler.schedule_history = working_schedule
-        print(f"\n✅ 优化完成，共优化 {optimized_count} 个段")
+        # 4. 执行移动
+        print("\n执行优化移动:")
+        optimized = self._do_optimization(npu_gaps, movable_segments)
         
-        return working_schedule
+        return optimized
     
-    def _collect_npu_segments(self) -> List[SegmentCandidate]:
-        """收集所有NPU段，按时间顺序"""
-        candidates = []
-        seen = set()  # 避免重复
+    def _get_resource_type_for_segment(self, task_id: str, sub_id: str) -> str:
+        """获取段的资源类型"""
+        task = self.scheduler.tasks.get(task_id)
+        if task:
+            for seg in task.get_sub_segments_for_scheduling():
+                if seg.sub_id == sub_id:
+                    return seg.resource_type.value
+        return "unknown"
+    
+    def _find_npu_gaps(self) -> List[Tuple[float, float]]:
+        """找出NPU空闲时段"""
+        # 收集所有NPU占用时段
+        npu_busy = []
+        
+        for event in self.original_schedule:
+            if hasattr(event, 'sub_segment_schedule'):
+                for sub_id, start, end in event.sub_segment_schedule:
+                    res_type = self._get_resource_type_for_segment(event.task_id, sub_id)
+                    if res_type == "NPU":
+                        npu_busy.append((start, end, event.task_id, sub_id))
+        
+        # 排序
+        npu_busy.sort()
+        print(f"  NPU占用时段:")
+        for start, end, task_id, sub_id in npu_busy:
+            print(f"    {start:.1f}-{end:.1f}ms: {task_id}.{sub_id}")
+        
+        # 找空隙
+        gaps = []
+        last_end = 0
+        for start, end, _, _ in npu_busy:
+            if start > last_end + 0.1:
+                gaps.append((last_end, start))
+            last_end = max(last_end, end)
+        
+        print(f"\n  NPU空隙:")
+        for start, end in gaps:
+            print(f"    {start:.1f}-{end:.1f}ms (持续{end-start:.1f}ms)")
+        
+        return gaps
+    
+    def _find_movable_segments(self) -> List[Dict]:
+        """找出任务B的可移动段"""
+        segments = []
         
         for event_idx, event in enumerate(self.original_schedule):
-            task = self.scheduler.tasks.get(event.task_id)
-            if not task:
-                continue
-            
-            # 从子段调度中提取NPU段
-            if hasattr(event, 'sub_segment_schedule') and event.sub_segment_schedule:
-                for sub_seg_id, start, end in event.sub_segment_schedule:
-                    # 创建唯一标识符
-                    segment_key = (event.task_id, sub_seg_id, start)
-                    if segment_key in seen:
-                        continue
-                    seen.add(segment_key)
-                    
-                    # 找到对应的段对象
-                    for seg in task.get_sub_segments_for_scheduling():
-                        if (seg.sub_id == sub_seg_id and 
-                            seg.resource_type == ResourceType.NPU):
-                            candidates.append(SegmentCandidate(
-                                task_id=task.task_id,
-                                task=task,
-                                segment=seg,
-                                original_start=start,
-                                original_end=end,
-                                event_index=event_idx
-                            ))
-                            break
+            if event.task_id == 'B' and hasattr(event, 'sub_segment_schedule'):
+                for seg_idx, (sub_id, start, end) in enumerate(event.sub_segment_schedule):
+                    res_type = self._get_resource_type_for_segment('B', sub_id)
+                    if res_type == "NPU":
+                        segments.append({
+                            'event_idx': event_idx,
+                            'seg_idx': seg_idx,
+                            'sub_id': sub_id,
+                            'start': start,
+                            'end': end,
+                            'duration': end - start
+                        })
+                        print(f"  B.{sub_id}: {start:.1f}-{end:.1f}ms (可移动)")
         
-        # 按开始时间排序
-        candidates.sort(key=lambda c: c.original_start)
-        
-        print("\n  [DEBUG] 收集到的NPU段:")
-        for c in candidates:
-            print(f"    {c.task_id}.{c.segment.sub_id} @ {c.original_start:.1f}-{c.original_end:.1f}ms")
-        
-        return candidates
+        return segments
     
-    def _find_best_gap_for_segment(self, candidate: SegmentCandidate, 
-                                   schedule: List[TaskScheduleInfo],
-                                   time_window: float) -> Optional[Dict]:
-        """为段找到最佳空隙"""
-        # 获取段的执行时长
-        resource = next((r for r in self.scheduler.resources[ResourceType.NPU] 
-                        if r.unit_id == "NPU_0"), None)
-        if not resource:
-            print(f"    [DEBUG] 找不到NPU_0资源")
-            return None
+    def _do_optimization(self, gaps: List[Tuple[float, float]], 
+                        segments: List[Dict]) -> List[TaskScheduleInfo]:
+        """执行优化"""
+        # 创建调度副本
+        new_schedule = copy.deepcopy(self.original_schedule)
         
-        duration = candidate.segment.get_duration(resource.bandwidth)
-        print(f"    [DEBUG] 段时长: {duration}ms")
+        # 记录移动
+        moves = {}  # (event_idx, seg_idx) -> new_start
         
-        # 构建NPU占用时间线（排除当前段）
-        npu_timeline = []
-        for event in schedule:
-            if hasattr(event, 'sub_segment_schedule'):
-                for sub_id, start, end in event.sub_segment_schedule:
-                    # 跳过当前段本身
-                    if (event.task_id == candidate.task_id and 
-                        sub_id == candidate.segment.sub_id and
-                        abs(start - candidate.original_start) < 0.01):
-                        continue
-                    
-                    # 检查是否是NPU事件
-                    # 问题可能在这里！需要检查具体的资源类型
-                    task = self.scheduler.tasks.get(event.task_id)
-                    if task:
-                        # 找到对应的子段
-                        for seg in task.get_sub_segments_for_scheduling():
-                            if seg.sub_id == sub_id and seg.resource_type == ResourceType.NPU:
-                                npu_timeline.append((start, end))
-                                print(f"    [DEBUG] NPU占用: {start:.1f}-{end:.1f}ms ({event.task_id})")
-                                break
-        
-        # 排序时间线
-        npu_timeline.sort()
-        print(f"    [DEBUG] NPU时间线: {npu_timeline}")
-        
-        # 寻找空隙
-        earliest_start = 0.0
-        print(f"    [DEBUG] 寻找空隙...")
-        
-        for i, (occ_start, occ_end) in enumerate(npu_timeline):
-            print(f"    [DEBUG] 检查空隙: {earliest_start:.1f}-{occ_start:.1f}ms")
+        # 尝试将B的段插入空隙
+        gap_idx = 0
+        for seg in segments:
+            if gap_idx >= len(gaps):
+                break
+                
+            gap_start, gap_end = gaps[gap_idx]
+            gap_size = gap_end - gap_start
             
-            # 检查当前位置是否能容纳段
-            if earliest_start + duration <= occ_start:
-                print(f"    [DEBUG] 空隙足够大！")
-                # 检查顺序约束
-                if self._check_segment_order_constraint(
-                    candidate, earliest_start, schedule
-                ):
-                    print(f"    [DEBUG] 顺序约束通过！")
-                    return {
-                        'new_start': earliest_start,
-                        'new_end': earliest_start + duration,
-                        'gap_before_event': i
-                    }
+            if seg['duration'] <= gap_size + 0.01:
+                # 可以放入
+                new_start = gap_start
+                moves[(seg['event_idx'], seg['seg_idx'])] = new_start
+                print(f"  ✓ 移动 B.{seg['sub_id']}: {seg['start']:.1f} -> {new_start:.1f}ms")
+                
+                # 更新空隙
+                gap_start += seg['duration']
+                if gap_end - gap_start < 1.0:
+                    gap_idx += 1
                 else:
-                    print(f"    [DEBUG] 顺序约束失败")
-            
-            # 更新下一个可能的开始时间
-            earliest_start = max(earliest_start, occ_end)
+                    gaps[gap_idx] = (gap_start, gap_end)
+            else:
+                print(f"  ✗ B.{seg['sub_id']} 太大，无法放入空隙")
         
-        # 检查最后的空间
-        print(f"    [DEBUG] 检查最后空隙: {earliest_start:.1f}ms之后")
-        if (earliest_start + duration <= time_window and
-            earliest_start < candidate.original_start - 0.01):
-            if self._check_segment_order_constraint(
-                candidate, earliest_start, schedule
-            ):
-                return {
-                    'new_start': earliest_start,
-                    'new_end': earliest_start + duration,
-                    'gap_before_event': len(npu_timeline)
-                }
+        # 应用移动
+        final_schedule = []
+        for idx, event in enumerate(new_schedule):
+            if any((idx, i) in moves for i in range(10)):  # 检查是否有移动
+                # 需要修改这个事件
+                new_sub_schedules = []
+                
+                if hasattr(event, 'sub_segment_schedule'):
+                    # 计算时间偏移量
+                    time_shift = None
+                    for seg_idx, (sub_id, start, end) in enumerate(event.sub_segment_schedule):
+                        key = (idx, seg_idx)
+                        if key in moves:
+                            # 有段被移动了，计算整体偏移
+                            if time_shift is None:
+                                time_shift = moves[key] - start
+                            new_start = moves[key]
+                            duration = end - start
+                            new_sub_schedules.append((sub_id, new_start, new_start + duration))
+                        else:
+                            # 其他段也要跟随移动
+                            if time_shift is not None and seg_idx > 0:
+                                # 如果前面的段被移动了，后面的段也要跟着移动
+                                duration = end - start
+                                # 计算新的开始时间：前一个段的结束时间
+                                if new_sub_schedules:
+                                    new_start = new_sub_schedules[-1][2]  # 前一段的结束时间
+                                else:
+                                    new_start = start + time_shift
+                                new_sub_schedules.append((sub_id, new_start, new_start + duration))
+                            else:
+                                new_sub_schedules.append((sub_id, start, end))
+                
+                # 创建新事件
+                new_event = copy.deepcopy(event)
+                new_event.sub_segment_schedule = new_sub_schedules
+                new_event.start_time = min(s[1] for s in new_sub_schedules)
+                new_event.end_time = max(s[2] for s in new_sub_schedules)
+                final_schedule.append(new_event)
+            else:
+                final_schedule.append(event)
         
-        print(f"    [DEBUG] 未找到合适空隙")
-        return None
-    
-    def _check_segment_order_constraint(self, candidate: SegmentCandidate,
-                                       new_start: float,
-                                       schedule: List[TaskScheduleInfo]) -> bool:
-        """检查段顺序约束（同一任务内的段必须保持顺序）"""
-        # 找到同任务的其他段
-        for event in schedule:
-            if event.task_id != candidate.task_id:
-                continue
-            
+        # 验证结果
+        print("\n优化后调度:")
+        for idx, event in enumerate(final_schedule):
+            print(f"\n  事件{idx}: 任务{event.task_id}")
             if hasattr(event, 'sub_segment_schedule'):
                 for sub_id, start, end in event.sub_segment_schedule:
-                    # 获取段编号进行比较
-                    if sub_id == candidate.segment.sub_id:
-                        continue
-                    
-                    # 提取段索引 (main_0, main_1, main_2)
-                    try:
-                        candidate_idx = int(candidate.segment.sub_id.split('_')[-1])
-                        other_idx = int(sub_id.split('_')[-1])
-                        
-                        # 如果是前面的段，新位置必须在它之后
-                        if other_idx < candidate_idx and end > new_start:
-                            return False
-                        
-                        # 如果是后面的段，新位置必须在它之前
-                        if other_idx > candidate_idx and start < new_start + 0.01:
-                            return False
-                    except:
-                        pass
+                    res_type = self._get_resource_type_for_segment(event.task_id, sub_id)
+                    print(f"    {sub_id}: {start:.1f}-{end:.1f}ms ({res_type})")
         
-        return True
-    
-    def _move_segment(self, schedule: List[TaskScheduleInfo], 
-                     candidate: SegmentCandidate,
-                     gap_info: Dict) -> List[TaskScheduleInfo]:
-        """移动段到新位置"""
-        new_schedule = []
+        return final_schedule
         
-        for event in schedule:
-            if event.task_id == candidate.task_id:
-                # 这是包含要移动段的事件
-                new_sub_schedules = []
-                
-                for sub_id, start, end in event.sub_segment_schedule:
-                    if sub_id == candidate.segment.sub_id:
-                        # 这是要移动的段，使用新时间
-                        new_sub_schedules.append((
-                            sub_id,
-                            gap_info['new_start'],
-                            gap_info['new_end']
-                        ))
-                    else:
-                        # 其他段保持不变（暂时）
-                        new_sub_schedules.append((sub_id, start, end))
-                
-                # 创建新事件
-                new_event = TaskScheduleInfo(
-                    task_id=event.task_id,
-                    start_time=min(s[1] for s in new_sub_schedules),
-                    end_time=max(s[2] for s in new_sub_schedules),
-                    assigned_resources=event.assigned_resources,
-                    actual_latency=event.actual_latency,
-                    runtime_type=event.runtime_type,
-                    sub_segment_schedule=new_sub_schedules
-                )
-                new_schedule.append(new_event)
-            else:
-                # 其他事件保持不变
-                new_schedule.append(event)
-        
-        return new_schedule
-    
-    def _cascade_compress(self, schedule: List[TaskScheduleInfo], 
-                         time_window: float) -> List[TaskScheduleInfo]:
-        """级联压缩：将所有事件尽可能向前移动"""
-        # 按开始时间排序
-        sorted_schedule = sorted(schedule, key=lambda e: e.start_time)
-        compressed = []
-        
-        # 跟踪每个资源的最早可用时间
-        resource_available = defaultdict(float)
-        
-        for event in sorted_schedule:
-            # 计算这个事件的最早开始时间
-            earliest_start = 0.0
-            
-            # 考虑资源约束
-            for res_type, res_id in event.assigned_resources.items():
-                earliest_start = max(earliest_start, resource_available[res_id])
-            
-            # 考虑任务依赖
-            task = self.scheduler.tasks[event.task_id]
-            for dep_task_id in task.dependencies:
-                # 找依赖任务的最后执行时间
-                for prev_event in compressed:
-                    if prev_event.task_id == dep_task_id:
-                        earliest_start = max(earliest_start, prev_event.end_time)
-            
-            # 考虑同任务的前序事件
-            for prev_event in compressed:
-                if prev_event.task_id == event.task_id:
-                    earliest_start = max(earliest_start, 
-                                       prev_event.end_time + task.min_interval_ms)
-            
-            # 移动事件
-            if earliest_start < event.start_time - 0.01:
-                # 需要向前移动
-                time_shift = earliest_start - event.start_time
-                
-                # 创建新事件
-                new_sub_schedules = []
-                if hasattr(event, 'sub_segment_schedule'):
-                    for sub_id, start, end in event.sub_segment_schedule:
-                        new_sub_schedules.append((
-                            sub_id,
-                            start + time_shift,
-                            end + time_shift
-                        ))
-                
-                new_event = TaskScheduleInfo(
-                    task_id=event.task_id,
-                    start_time=event.start_time + time_shift,
-                    end_time=event.end_time + time_shift,
-                    assigned_resources=event.assigned_resources,
-                    actual_latency=event.actual_latency,
-                    runtime_type=event.runtime_type,
-                    sub_segment_schedule=new_sub_schedules
-                )
-                compressed.append(new_event)
-                
-                # 更新资源可用时间
-                for res_type, res_id in new_event.assigned_resources.items():
-                    resource_available[res_id] = new_event.end_time
-            else:
-                # 保持原位置
-                compressed.append(event)
-                
-                # 更新资源可用时间
-                for res_type, res_id in event.assigned_resources.items():
-                    resource_available[res_id] = event.end_time
-        
-        return compressed
+        # # 使用 debug_compactor 进一步优化
+        # print("\n应用调度紧凑化...")
+        # try:
+        #     from .debug_compactor import DebugCompactor
+        #     compactor = DebugCompactor(self.scheduler, 100.0)
+        #     # 临时更新调度历史
+        #     self.scheduler.schedule_history = final_schedule
+        #     compacted_schedule, idle_time = compactor.simple_compact()
+        #     print(f"  紧凑化后末尾空闲: {idle_time:.1f}ms")
+        #     return compacted_schedule
+        # except Exception as e:
+        #     print(f"  紧凑化失败: {e}")
+        #     return final_schedule
