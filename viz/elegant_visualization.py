@@ -225,6 +225,7 @@ class ElegantSchedulerVisualizer:
                 if resource_id in y_positions:
                     segments_info.append({
                         'index': i,
+                        'sub_id': sub_seg_id,  # 保存段ID
                         'start': start_time,
                         'end': end_time,
                         'resource_id': resource_id,
@@ -238,10 +239,22 @@ class ElegantSchedulerVisualizer:
             end_time = seg_info['end']
             y_pos = seg_info['y_pos']
             resource_id = seg_info['resource_id']
+            sub_id = seg_info['sub_id']
             duration = end_time - start_time
             
-            # Subtle opacity variation for segments
-            alpha = 0.9 - (i * 0.1 / num_segments)
+            # 为不同的段使用略微不同的颜色
+            # 使用HSL调整亮度
+            import matplotlib.colors as mcolors
+            import colorsys
+            
+            # 转换为HSL
+            rgb = mcolors.hex2color(base_color)
+            h, l, s = colorsys.rgb_to_hls(*rgb)
+            
+            # 根据段索引调整亮度
+            l_adjusted = l * (1 - 0.1 * (i % 3))  # 轻微变化
+            rgb_adjusted = colorsys.hls_to_rgb(h, l_adjusted, s)
+            segment_color = mcolors.rgb2hex(rgb_adjusted)
             
             # Main rectangle with rounded corners
             rect = patches.FancyBboxPatch(
@@ -249,25 +262,46 @@ class ElegantSchedulerVisualizer:
                 duration, 
                 bar_height,
                 boxstyle="round,pad=0.01,rounding_size=0.02",
-                facecolor=base_color,
-                edgecolor='none',
-                alpha=alpha,
-                linewidth=0
+                facecolor=segment_color,
+                edgecolor='white',  # 白色边框
+                alpha=0.9,
+                linewidth=1.5
             )
             ax.add_patch(rect)
             
-            # Segment separator - thin white line
+            # 添加段内标签（如果空间足够）
+            if duration > 2.0:  # 只在段足够宽时显示
+                # 提取段编号
+                seg_num = sub_id.split('_')[-1] if '_' in sub_id else str(i)
+                
+                ax.text(start_time + duration/2, y_pos, 
+                    f"S{seg_num}",
+                    ha='center', va='center', 
+                    fontsize=7,
+                    color='white',
+                    fontweight='bold',
+                    alpha=0.8)
+            
+            # 添加垂直分割线（除了最后一段）
             if i < num_segments - 1:
                 ax.plot([end_time, end_time], 
-                       [y_pos - bar_height/2 + 2, y_pos + bar_height/2 - 2],
-                       color='white', linewidth=1.5, solid_capstyle='round')
+                    [y_pos - bar_height/2 + 1, y_pos + bar_height/2 - 1],
+                    color='white', 
+                    linewidth=2, 
+                    linestyle='--',
+                    alpha=0.7,
+                    solid_capstyle='round')
         
-        # 统一处理标签显示 - 显示在色块上方
+        # 统一处理任务标签 - 显示在色块上方
         if show_all_labels and segments_info:
             first_seg = segments_info[0]
             last_seg = segments_info[-1]
             
             label = self._get_dragon4_task_name(task)
+            
+            # 添加段数信息
+            if num_segments > 1:
+                label += f" [{num_segments}段]"
             
             # 计算标签位置（整个任务的中心，但在色块上方）
             label_x = (first_seg['start'] + last_seg['end']) / 2
@@ -288,12 +322,13 @@ class ElegantSchedulerVisualizer:
             
             # 绘制标签
             ax.text(label_x, label_y, label,
-                   ha='center', va='bottom', fontsize=8,
-                   color='#374151', fontweight='600',
-                   bbox=dict(boxstyle='round,pad=0.15', 
-                           facecolor='white', 
-                           edgecolor='none',
-                           alpha=0.85))
+                ha='center', va='bottom', fontsize=8,
+                color='#374151', fontweight='600',
+                bbox=dict(boxstyle='round,pad=0.15', 
+                        facecolor='white', 
+                        edgecolor=base_color,  # 使用任务颜色作为边框
+                        linewidth=1,
+                        alpha=0.9))
     
     def _plot_elegant_regular_task(self, ax, task, schedule, y_positions, 
                                  bar_height, colors, show_all_labels):
@@ -375,7 +410,7 @@ class ElegantSchedulerVisualizer:
         pass
     
     def _create_elegant_legend(self, ax, colors):
-        """Create minimal elegant legend"""
+        """Create minimal elegant legend with segmentation info"""
         # Priority legend
         legend_elements = []
         for priority in [TaskPriority.CRITICAL, TaskPriority.HIGH, 
@@ -389,17 +424,29 @@ class ElegantSchedulerVisualizer:
             )
             legend_elements.append(elem)
         
+        # 添加分段说明
+        if any(task.is_segmented for task in self.scheduler.tasks.values()):
+            # 添加分段示例
+            segmented_elem = patches.Rectangle((0, 0), 1, 1,
+                facecolor='gray',
+                edgecolor='white',
+                linewidth=1.5,
+                alpha=0.7,
+                label='分段任务'
+            )
+            legend_elements.append(segmented_elem)
+        
         # Create compact legend
         legend = ax.legend(handles=legend_elements, 
-                          loc='upper right',
-                          frameon=True,
-                          fancybox=False,
-                          shadow=False,
-                          ncol=4,  # Horizontal layout
-                          fontsize=9,
-                          handlelength=1.5,
-                          handletextpad=0.5,
-                          columnspacing=1.0)
+                        loc='upper right',
+                        frameon=True,
+                        fancybox=False,
+                        shadow=False,
+                        ncol=5,  # 增加列数
+                        fontsize=9,
+                        handlelength=1.5,
+                        handletextpad=0.5,
+                        columnspacing=1.0)
         
         legend.get_frame().set_facecolor('white')
         legend.get_frame().set_edgecolor('#E5E7EB')
