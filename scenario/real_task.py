@@ -11,7 +11,7 @@ def create_real_tasks():
     # 任务1: cnntk_template
     task1 = NNTask("T1", "MOTR",
                    priority=TaskPriority.CRITICAL,
-                   runtime_type=RuntimeType.DSP_RUNTIME,
+                   runtime_type=RuntimeType.ACPU_RUNTIME,
                    segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION)
     task1.set_dsp_npu_sequence([
         (ResourceType.NPU, {20: 0.652, 40: 0.410, 120: 0.249}, 0, "npu_s0"),
@@ -95,7 +95,7 @@ def create_real_tasks():
                    segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION)
     task6.set_npu_only({40: 0.778, 120: 0.631}, "main")
     task6.set_performance_requirements(fps=100, latency=10)
-    task6.add_dependency("T1")  # re_id depends on MOTR
+    # task6.add_dependency("T1")  # re_id depends on MOTR
     tasks.append(task6)
     print("  ✓ T6 re id: NO SEG")
     
@@ -113,10 +113,10 @@ def create_real_tasks():
     #任务8： qim
     task8 = NNTask("T8", "qim",
                    priority=TaskPriority.LOW,
-                   runtime_type=RuntimeType.DSP_RUNTIME,
+                   runtime_type=RuntimeType.ACPU_RUNTIME,
                    segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION)
     task8.set_dsp_npu_sequence([
-        (ResourceType.DSP, {40: 0.995, 120: 4.968}, 0, "dsp_sub"),
+        (ResourceType.DSP, {40: 0.995, 120: 0.968}, 0, "dsp_sub"),
         (ResourceType.NPU, {40: 0.656, 120: 0.89}, 0.995, "npu_sub"),
     ])
     task8.set_performance_requirements(fps=25, latency=40)
