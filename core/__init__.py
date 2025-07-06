@@ -32,9 +32,8 @@ from .schedule_tracer import ScheduleTracer
 
 # 新架构组件
 from .launcher import TaskLauncher, TaskLaunchConfig, LaunchPlan, LaunchEvent
-
+from .executor import ScheduleExecutor, TaskInstance, SegmentCompletion
 # 待实现组件（当文件创建后取消注释）
-# from .executor import ScheduleExecutor
 # from .evaluator import PerformanceEvaluator, PerformanceMetrics
 # from .launch_optimizer import LaunchOptimizer
 
@@ -73,7 +72,9 @@ __all__ = [
     'LaunchEvent',
     
     # Future components (uncomment when ready)
-    # 'ScheduleExecutor',
+    'ScheduleExecutor',
+    'TaskInstance',
+    'SegmentCompletion',
     # 'PerformanceEvaluator', 
     # 'PerformanceMetrics',
     # 'LaunchOptimizer'
