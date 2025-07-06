@@ -2,12 +2,14 @@
 """
 简化的资源队列实现
 用于新架构中的FIFO调度
+支持固定带宽和动态带宽两种模式
 """
 
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, field
 from collections import deque
 from core.enums import TaskPriority, ResourceType
+from core.models import SubSegment
 
 
 @dataclass
@@ -17,13 +19,26 @@ class QueuedTask:
     priority: TaskPriority
     ready_time: float
     enqueue_time: float  # 入队时间，用于FIFO排序
-    estimated_duration: float
+    
+    # 新增：子段信息
+    sub_segments: List[SubSegment] = field(default_factory=list)
+    current_segment_index: int = 0  # 当前要执行的子段索引
     
     def __lt__(self, other):
         """比较函数：优先级高的先执行，同优先级按入队时间"""
         if self.priority != other.priority:
             return self.priority.value < other.priority.value
         return self.enqueue_time < other.enqueue_time
+    
+    def get_current_segment(self) -> Optional[SubSegment]:
+        """获取当前要执行的子段"""
+        if 0 <= self.current_segment_index < len(self.sub_segments):
+            return self.sub_segments[self.current_segment_index]
+        return None
+    
+    def has_remaining_segments(self) -> bool:
+        """检查是否还有剩余的子段"""
+        return self.current_segment_index < len(self.sub_segments)
 
 
 @dataclass
@@ -31,7 +46,7 @@ class ResourceQueue:
     """单个资源的任务队列"""
     resource_id: str
     resource_type: ResourceType
-    bandwidth: float
+    bandwidth: float  # 固定带宽模式下使用
     
     # 按优先级组织的队列
     priority_queues: Dict[TaskPriority, deque] = field(default_factory=dict)
@@ -45,6 +60,10 @@ class ResourceQueue:
     total_tasks_executed: int = 0
     total_busy_time: float = 0.0
     
+    # 动态带宽支持
+    bandwidth_manager: Optional['BandwidthManager'] = None  # 可选的带宽管理器
+    last_used_bandwidth: float = 0.0  # 最近使用的实际带宽
+    
     def __post_init__(self):
         """初始化优先级队列"""
         if not self.priority_queues:
@@ -53,14 +72,14 @@ class ResourceQueue:
             }
     
     def enqueue(self, task_id: str, priority: TaskPriority, 
-                ready_time: float, estimated_duration: float) -> bool:
+                ready_time: float, sub_segments: List[SubSegment]) -> bool:
         """将任务加入队列"""
         queued_task = QueuedTask(
             task_id=task_id,
             priority=priority,
             ready_time=ready_time,
             enqueue_time=self.current_time,  # 记录入队时间
-            estimated_duration=estimated_duration
+            sub_segments=sub_segments
         )
         
         self.priority_queues[priority].append(queued_task)
@@ -91,12 +110,83 @@ class ResourceQueue:
         
         return None
     
-    def execute_task(self, task: QueuedTask, start_time: float) -> float:
-        """执行任务并更新资源状态"""
-        self.current_task = task.task_id
-        self.busy_until = start_time + task.estimated_duration
+    def execute_task(self, task: QueuedTask, start_time: float, bandwidth: Optional[float] = None) -> float:
+        """执行任务的当前子段并更新资源状态
+        
+        Args:
+            task: 要执行的任务
+            start_time: 开始时间
+            bandwidth: 使用的带宽（如果为None，则使用动态带宽或默认带宽）
+            
+        Returns:
+            任务结束时间
+        """
+        current_segment = task.get_current_segment()
+        if not current_segment:
+            return start_time
+        
+        # 确定使用的带宽
+        if bandwidth is None:
+            if self.bandwidth_manager:
+                # 使用动态带宽
+                return self._execute_with_dynamic_bandwidth(task, start_time, current_segment)
+            else:
+                # 使用默认固定带宽
+                bandwidth = self.bandwidth
+        
+        # 计算子段执行时间
+        duration = current_segment.get_duration(bandwidth)
+        
+        self.current_task = f"{task.task_id}_{current_segment.sub_id}"
+        self.busy_until = start_time + duration
         self.total_tasks_executed += 1
-        self.total_busy_time += task.estimated_duration
+        self.total_busy_time += duration
+        self.last_used_bandwidth = bandwidth
+        
+        # 移动到下一个子段
+        task.current_segment_index += 1
+        
+        return self.busy_until
+    
+    def _execute_with_dynamic_bandwidth(self, task: QueuedTask, start_time: float, 
+                                      segment: SubSegment) -> float:
+        """使用动态带宽执行任务"""
+        if not self.bandwidth_manager:
+            # 降级到固定带宽
+            return self.execute_task(task, start_time, self.bandwidth)
+        
+        # 获取当前可用带宽
+        current_bandwidth = self.bandwidth_manager.get_available_bandwidth(
+            self.resource_type, start_time, exclude_resource=self.resource_id
+        )
+        
+        # 计算执行时间
+        duration = segment.get_duration(current_bandwidth)
+        end_time = start_time + duration
+        
+        # 向带宽管理器注册这次使用
+        actual_bandwidth = self.bandwidth_manager.allocate_bandwidth(
+            self.resource_id,
+            self.resource_type,
+            f"{task.task_id}_{segment.sub_id}",
+            start_time,
+            end_time
+        )
+        
+        # 如果实际分配的带宽不同，重新计算时间
+        if abs(actual_bandwidth - current_bandwidth) > 0.1:
+            duration = segment.get_duration(actual_bandwidth)
+            end_time = start_time + duration
+        
+        # 更新状态
+        self.current_task = f"{task.task_id}_{segment.sub_id}"
+        self.busy_until = end_time
+        self.total_tasks_executed += 1
+        self.total_busy_time += duration
+        self.last_used_bandwidth = actual_bandwidth
+        
+        # 移动到下一个子段
+        task.current_segment_index += 1
         
         return self.busy_until
     
@@ -145,16 +235,24 @@ class ResourceQueue:
 class ResourceQueueManager:
     """资源队列管理器"""
     
-    def __init__(self):
+    def __init__(self, bandwidth_manager: Optional['BandwidthManager'] = None):
         self.resource_queues: Dict[str, ResourceQueue] = {}
+        self.bandwidth_manager = bandwidth_manager
     
     def add_resource(self, resource_id: str, resource_type: ResourceType, 
-                     bandwidth: float) -> ResourceQueue:
-        """添加资源"""
+                     bandwidth: float = 0.0) -> ResourceQueue:
+        """添加资源
+        
+        Args:
+            resource_id: 资源ID
+            resource_type: 资源类型
+            bandwidth: 固定带宽值（如果使用动态带宽管理器，可以设为0）
+        """
         queue = ResourceQueue(
             resource_id=resource_id,
             resource_type=resource_type,
-            bandwidth=bandwidth
+            bandwidth=bandwidth,
+            bandwidth_manager=self.bandwidth_manager
         )
         self.resource_queues[resource_id] = queue
         return queue

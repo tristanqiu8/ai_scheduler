@@ -4,23 +4,19 @@ from core.enums import ResourceType, RuntimeType, CutPointStatus
 
 @dataclass
 class CutPoint:
-    """Network cut point definition"""
+    """Network cut point definition with duration info"""
     op_id: str  # Operation ID (e.g., "op1", "op10", "op23")
-    position: float  # Relative position in segment (0.0 to 1.0)
+    # Duration table for the segment BEFORE this cut point
+    before_duration_table: Dict[float, float]  # {BW: duration} for segment before cut
     overhead_ms: float = 0.15  # Overhead introduced by cutting at this point
     status: CutPointStatus = CutPointStatus.AUTO
-    
-    def __post_init__(self):
-        if not (0.0 <= self.position <= 1.0):
-            raise ValueError("Cut point position must be between 0.0 and 1.0")
 
 @dataclass
 class SubSegment:
     """Sub-segment created by cutting at cut points"""
     sub_id: str  # Sub-segment identifier
     resource_type: ResourceType
-    duration_table: Dict[float, float]  # {BW: duration} lookup table
-    start_time: float  # Start time relative to original segment beginning
+    duration_table: Dict[float, float]  # {BW: duration} lookup table, same format as ResourceSegment
     cut_overhead: float = 0.0  # Overhead from cutting operations
     original_segment_id: str = ""  # Reference to original segment
     
@@ -28,6 +24,7 @@ class SubSegment:
         """Get execution time based on bandwidth, including cut overhead"""
         base_duration = self.duration_table.get(bw, 0.0)
         if bw not in self.duration_table and self.duration_table:
+            # If exact bandwidth not found, use closest
             closest_bw = min(self.duration_table.keys(), key=lambda x: abs(x - bw))
             base_duration = self.duration_table[closest_bw]
         return base_duration + self.cut_overhead
@@ -50,15 +47,25 @@ class ResourceSegment:
         """Get execution time based on bandwidth"""
         if bw in self.duration_table:
             return self.duration_table[bw]
+        # If exact bandwidth not found, use closest
         closest_bw = min(self.duration_table.keys(), key=lambda x: abs(x - bw))
         return self.duration_table[closest_bw]
     
-    def add_cut_point(self, op_id: str, position: float, overhead_ms: float = 0.15):
-        """Add a cut point to this segment"""
-        cut_point = CutPoint(op_id=op_id, position=position, overhead_ms=overhead_ms)
+    def add_cut_point(self, op_id: str, before_duration_table: Dict[float, float], 
+                      overhead_ms: float = 0.15):
+        """Add a cut point to this segment with duration info
+        
+        Args:
+            op_id: Operation ID where to cut
+            before_duration_table: Duration table for the segment BEFORE this cut point
+            overhead_ms: Overhead introduced by cutting at this point
+        """
+        cut_point = CutPoint(
+            op_id=op_id, 
+            before_duration_table=before_duration_table,
+            overhead_ms=overhead_ms
+        )
         self.cut_points.append(cut_point)
-        # Sort cut points by position for correct order
-        self.cut_points.sort(key=lambda cp: cp.position)
     
     def apply_segmentation(self, enabled_cuts: List[str]) -> List[SubSegment]:
         """Apply segmentation using specified cut points"""
@@ -68,59 +75,56 @@ class ResourceSegment:
                 sub_id=f"{self.segment_id}_0",
                 resource_type=self.resource_type,
                 duration_table=self.duration_table.copy(),
-                start_time=0.0,
                 original_segment_id=self.segment_id
             )
             self.sub_segments = [sub_seg]
             self.is_segmented = False
             return self.sub_segments
         
-        # Get enabled cut points in order
+        # Filter and sort enabled cut points
         enabled_cut_points = [cp for cp in self.cut_points if cp.op_id in enabled_cuts]
-        enabled_cut_points.sort(key=lambda cp: cp.position)
         
         if not enabled_cut_points:
             return self.apply_segmentation([])  # No valid cuts
         
-        # Calculate sub-segments
+        # Create sub-segments based on cut points
         self.sub_segments = []
-        prev_position = 0.0
         total_overhead = 0.0
         
+        # Track cumulative duration to calculate remaining segment
+        cumulative_duration = {bw: 0.0 for bw in self.duration_table.keys()}
+        
+        # Create sub-segments for each cut point
         for i, cut_point in enumerate(enabled_cut_points):
-            # Create sub-segment from previous position to current cut
-            segment_ratio = cut_point.position - prev_position
-            
-            # Calculate duration table for this sub-segment
-            sub_duration_table = {}
-            for bw, total_duration in self.duration_table.items():
-                sub_duration_table[bw] = total_duration * segment_ratio
-            
+            # The duration table in cut_point defines this sub-segment's duration
             sub_seg = SubSegment(
                 sub_id=f"{self.segment_id}_{i}",
                 resource_type=self.resource_type,
-                duration_table=sub_duration_table,
-                start_time=prev_position * self.get_duration(40),  # Use 4.0 as reference BW
+                duration_table=cut_point.before_duration_table.copy(),
                 cut_overhead=cut_point.overhead_ms,
                 original_segment_id=self.segment_id
             )
             
             self.sub_segments.append(sub_seg)
             total_overhead += cut_point.overhead_ms
-            prev_position = cut_point.position
-        
-        # Create final sub-segment from last cut to end
-        if prev_position < 1.0:
-            segment_ratio = 1.0 - prev_position
-            sub_duration_table = {}
-            for bw, total_duration in self.duration_table.items():
-                sub_duration_table[bw] = total_duration * segment_ratio
             
+            # Update cumulative duration
+            for bw in cumulative_duration:
+                if bw in cut_point.before_duration_table:
+                    cumulative_duration[bw] += cut_point.before_duration_table[bw]
+        
+        # Create final sub-segment with remaining duration
+        final_duration_table = {}
+        for bw, total_duration in self.duration_table.items():
+            remaining_duration = total_duration - cumulative_duration.get(bw, 0.0)
+            if remaining_duration > 0:
+                final_duration_table[bw] = remaining_duration
+        
+        if final_duration_table:
             final_sub_seg = SubSegment(
                 sub_id=f"{self.segment_id}_{len(enabled_cut_points)}",
                 resource_type=self.resource_type,
-                duration_table=sub_duration_table,
-                start_time=prev_position * self.get_duration(40),
+                duration_table=final_duration_table,
                 cut_overhead=0.0,  # No overhead for final segment
                 original_segment_id=self.segment_id
             )

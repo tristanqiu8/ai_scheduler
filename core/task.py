@@ -210,12 +210,17 @@ class NNTask:
             segment = ResourceSegment(resource_type, duration_table, start_time, segment_id)
             self.segments.append(segment)
     
-    def add_cut_points_to_segment(self, segment_id: str, cut_points: List[Tuple[str, float, float]]):
-        """Add cut points to a specific segment"""
+    def add_cut_points_to_segment(self, segment_id: str, 
+                                 cut_points: List[Tuple[str, Dict[float, float], float]]):
+        """Add cut points to a specific segment
+        Args:
+            segment_id: ID of the segment to add cut points to
+            cut_points: List of (op_id, before_duration_table, overhead_ms)
+        """
         segment = self.get_segment_by_id(segment_id)
         if segment:
-            for op_id, position, overhead_ms in cut_points:
-                segment.add_cut_point(op_id, position, overhead_ms)
+            for op_id, before_duration_table, overhead_ms in cut_points:
+                segment.add_cut_point(op_id, before_duration_table, overhead_ms)
         else:
             raise ValueError(f"Segment {segment_id} not found in task {self.task_id}")
     
@@ -250,12 +255,27 @@ class NNTask:
             segmentation_decisions = self.current_segmentation
         
         max_end_time = 0.0
+        current_time = 0.0
+        
         for segment in self.segments:
+            # 处理段的开始时间（保持向后兼容）
+            if segment.start_time > current_time:
+                current_time = segment.start_time
+            
             enabled_cuts = segmentation_decisions.get(segment.segment_id, [])
             bw = resource_bw_map.get(segment.resource_type, 1.0)
-            duration = segment.get_total_duration_with_cuts(bw, enabled_cuts)
-            end_time = segment.start_time + duration
-            max_end_time = max(max_end_time, end_time)
+            
+            if segment.is_segmented and segment.sub_segments:
+                # 分段的情况
+                for sub_seg in segment.sub_segments:
+                    duration = sub_seg.get_duration(bw)
+                    current_time += duration
+            else:
+                # 未分段的情况
+                duration = segment.get_total_duration_with_cuts(bw, enabled_cuts)
+                current_time += duration
+            
+            max_end_time = max(max_end_time, current_time)
         
         return max_end_time
     
@@ -271,7 +291,6 @@ class NNTask:
                     sub_id=f"{segment.segment_id}_0",
                     resource_type=segment.resource_type,
                     duration_table=segment.duration_table.copy(),
-                    start_time=segment.start_time,
                     original_segment_id=segment.segment_id
                 )
                 all_sub_segments.append(sub_seg)
