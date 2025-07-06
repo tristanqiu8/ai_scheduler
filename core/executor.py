@@ -52,6 +52,10 @@ class SegmentCompletion:
     segment_index: int
     completion_time: float
     resource_id: str
+    
+    def __lt__(self, other):
+        """比较方法，用于堆排序"""
+        return self.completion_time < other.completion_time
 
 
 class ScheduleExecutor:
