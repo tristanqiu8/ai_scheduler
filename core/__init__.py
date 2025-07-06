@@ -30,8 +30,10 @@ from .bandwidth_manager import BandwidthManager, BandwidthAllocation
 from .resource_queue import ResourceQueue, ResourceQueueManager, QueuedTask
 from .schedule_tracer import ScheduleTracer
 
-# 新架构组件（当文件创建后取消注释）
-# from .launcher import TaskLauncher, TaskLaunchConfig, LaunchPlan
+# 新架构组件
+from .launcher import TaskLauncher, TaskLaunchConfig, LaunchPlan, LaunchEvent
+
+# 待实现组件（当文件创建后取消注释）
 # from .executor import ScheduleExecutor
 # from .evaluator import PerformanceEvaluator, PerformanceMetrics
 # from .launch_optimizer import LaunchOptimizer
@@ -64,10 +66,13 @@ __all__ = [
     'QueuedTask',
     'ScheduleTracer',
     
-    # New architecture (uncomment when ready)
-    # 'TaskLauncher', 
-    # 'TaskLaunchConfig', 
-    # 'LaunchPlan',
+    # Launcher components
+    'TaskLauncher', 
+    'TaskLaunchConfig', 
+    'LaunchPlan',
+    'LaunchEvent',
+    
+    # Future components (uncomment when ready)
     # 'ScheduleExecutor',
     # 'PerformanceEvaluator', 
     # 'PerformanceMetrics',

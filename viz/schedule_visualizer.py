@@ -221,9 +221,9 @@ class ScheduleVisualizer:
                 
                 # 创建矩形
                 rect = Rectangle(
-                    (exec.start_time, y_pos - 0.4),
+                    (exec.start_time, y_pos - 0.2),
                     exec.duration,
-                    0.8,
+                    0.4,
                     facecolor=color,
                     edgecolor='black',
                     linewidth=1
@@ -281,6 +281,7 @@ class ScheduleVisualizer:
         if self.tracer.start_time is not None and self.tracer.end_time is not None:
             ax.set_xlim(self.tracer.start_time - 1, self.tracer.end_time + 1)
         
+        ax.set_ylim(-0.5, len(all_resources_reversed) - 0.5)
         # 添加图例
         legend_elements = [
             patches.Patch(color=color, label=priority.name)
