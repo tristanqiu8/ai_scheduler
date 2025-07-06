@@ -155,9 +155,9 @@ class ResourceQueue:
             # 降级到固定带宽
             return self.execute_task(task, start_time, self.bandwidth)
         
-        # 获取当前可用带宽
+        # 获取当前可用带宽（修复：移除多余的resource_type参数）
         current_bandwidth = self.bandwidth_manager.get_available_bandwidth(
-            self.resource_type, start_time, exclude_resource=self.resource_id
+            start_time, exclude_resource=self.resource_id
         )
         
         # 计算执行时间
