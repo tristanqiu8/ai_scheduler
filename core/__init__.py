@@ -28,6 +28,7 @@ from .bandwidth_manager import BandwidthManager, BandwidthAllocation
 
 # 资源队列
 from .resource_queue import ResourceQueue, ResourceQueueManager, QueuedTask
+from .schedule_tracer import ScheduleTracer
 
 # 新架构组件（当文件创建后取消注释）
 # from .launcher import TaskLauncher, TaskLaunchConfig, LaunchPlan
@@ -61,6 +62,7 @@ __all__ = [
     'ResourceQueue',
     'ResourceQueueManager', 
     'QueuedTask',
+    'ScheduleTracer',
     
     # New architecture (uncomment when ready)
     # 'TaskLauncher', 

@@ -3,6 +3,6 @@
 Visualization components for AI Scheduler
 """
 
-from .visualization import ElegantSchedulerVisualizer
+from .schedule_visualizer import ScheduleVisualizer
 
-__all__ = ['ElegantSchedulerVisualizer']
+__all__ = ['ScheduleVisualizer']
