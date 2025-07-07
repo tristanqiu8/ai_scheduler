@@ -155,11 +155,19 @@ class PerformanceEvaluator:
             )
         
         # 构建发射时间映射
-        launch_times = defaultdict(list)  # task_id -> [launch_times]
+        launch_times = defaultdict(list)  # task_id -> [(instance_id, launch_time)]
         if launch_events:
             for event in launch_events:
-                if hasattr(event, 'launch_time') and hasattr(event, 'task_id'):
-                    launch_times[event.task_id].append(event.launch_time)
+                # 尝试获取时间属性（兼容不同的属性名）
+                launch_time = None
+                if hasattr(event, 'time'):
+                    launch_time = event.time
+                elif hasattr(event, 'launch_time'):
+                    launch_time = event.launch_time
+                
+                if launch_time is not None and hasattr(event, 'task_id'):
+                    instance_id = getattr(event, 'instance_id', 0)
+                    launch_times[event.task_id].append((instance_id, launch_time))
         
         # 分析执行历史
         task_instances = defaultdict(lambda: defaultdict(list))  # task_id -> instance -> executions
@@ -193,13 +201,22 @@ class PerformanceEvaluator:
                 first_exec = min(executions, key=lambda e: e.start_time)
                 last_exec = max(executions, key=lambda e: e.end_time)
                 
-                # 计算等待时间（如果有发射时间）
-                if task_id in launch_times and instance_num < len(launch_times[task_id]):
-                    launch_time = launch_times[task_id][instance_num]
+                # 查找对应的发射时间
+                launch_time = None
+                if task_id in launch_times:
+                    # 查找匹配的实例发射时间
+                    for inst_id, l_time in launch_times[task_id]:
+                        if inst_id == instance_num:
+                            launch_time = l_time
+                            break
+                
+                # 计算延迟
+                if launch_time is not None:
+                    # 等待时间：发射到首次执行
                     wait_time = first_exec.start_time - launch_time
                     metrics.wait_times.append(wait_time)
                     
-                    # 计算总延迟（发射到完成）
+                    # 总延迟：发射到完成
                     total_latency = last_exec.end_time - launch_time
                     metrics.latencies.append(total_latency)
                     
@@ -230,44 +247,34 @@ class PerformanceEvaluator:
                 metrics.achieved_fps = (metrics.instance_count * 1000.0) / self.time_window
                 metrics.fps_achievement_rate = min(100.0, (metrics.achieved_fps / metrics.fps_requirement) * 100.0)
                 metrics.fps_satisfaction = metrics.achieved_fps >= metrics.fps_requirement
-    
     def _evaluate_resource_utilization(self):
         """评估资源利用率"""
-        # 获取所有资源
-        all_resources = {}
-        for res_type in ResourceType:
-            if res_type in self.queue_manager.resource_queues:
-                for res_id, queue in self.queue_manager.resource_queues[res_type].items():
-                    all_resources[res_id] = (res_type, queue.capacity)
-        
-        # 初始化资源指标
-        for res_id, (res_type, capacity) in all_resources.items():
+        # 直接从 resource_queues 获取所有资源
+        for res_id, queue in self.queue_manager.resource_queues.items():
             self.resource_metrics[res_id] = ResourceUtilizationMetrics(
                 resource_id=res_id,
-                resource_type=res_type,
-                capacity=capacity,
+                resource_type=queue.resource_type,
+                capacity=queue.bandwidth,
                 total_time=self.time_window
             )
         
-        # 分析资源使用情况
-        resource_timeline = self.tracer.get_timeline()
-        
-        for res_id, executions in resource_timeline.items():
-            if res_id not in self.resource_metrics:
-                continue
+        # 分析每个资源的执行情况
+        for execution in self.tracer.executions:
+            res_id = execution.resource_id
+            if res_id in self.resource_metrics:
+                metrics = self.resource_metrics[res_id]
                 
-            metrics = self.resource_metrics[res_id]
-            
-            # 计算忙碌时间
-            for execution in executions:
-                metrics.busy_time += execution.duration
+                # 计算执行时间
+                duration = execution.end_time - execution.start_time
+                metrics.busy_time += duration
                 metrics.segment_executions += 1
                 
                 # 统计任务执行
                 base_task_id = execution.task_id.split('#')[0] if '#' in execution.task_id else execution.task_id
                 metrics.task_executions[base_task_id] += 1
-            
-            # 计算利用率
+        
+        # 计算利用率
+        for metrics in self.resource_metrics.values():
             metrics.idle_time = metrics.total_time - metrics.busy_time
             if metrics.total_time > 0:
                 metrics.utilization_rate = (metrics.busy_time / metrics.total_time) * 100.0
