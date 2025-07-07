@@ -33,9 +33,8 @@ from .schedule_tracer import ScheduleTracer
 # 新架构组件
 from .launcher import TaskLauncher, TaskLaunchConfig, LaunchPlan, LaunchEvent
 from .executor import ScheduleExecutor, TaskInstance, SegmentCompletion
-# 待实现组件（当文件创建后取消注释）
-# from .evaluator import PerformanceEvaluator, PerformanceMetrics
-# from .launch_optimizer import LaunchOptimizer
+from .evaluator import PerformanceEvaluator, TaskPerformanceMetrics, ResourceUtilizationMetrics, OverallPerformanceMetrics
+from .launch_optimizer import LaunchOptimizer, OptimizationConfig, LaunchStrategy
 
 __all__ = [
     # Enums
@@ -75,7 +74,11 @@ __all__ = [
     'ScheduleExecutor',
     'TaskInstance',
     'SegmentCompletion',
-    # 'PerformanceEvaluator', 
-    # 'PerformanceMetrics',
-    # 'LaunchOptimizer'
+    'PerformanceEvaluator',
+    'TaskPerformanceMetrics',
+    'ResourceUtilizationMetrics',
+    'OverallPerformanceMetrics',
+    'LaunchOptimizer',
+    'OptimizationConfig',
+    'LaunchStrategy'
 ]

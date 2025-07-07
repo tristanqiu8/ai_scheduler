@@ -256,9 +256,9 @@ class TaskLauncher:
                 sub_seg = SubSegment(
                     sub_id=seg.segment_id,
                     resource_type=seg.resource_type,
-                    bandwidth_duration_table=seg.duration_table,
-                    start_time=seg.start_time,
-                    parent_id=seg.segment_id
+                    duration_table=seg.duration_table,
+                    cut_overhead=0.0,
+                    original_segment_id=seg.segment_id
                 )
                 sub_segments.append(sub_seg)
         
