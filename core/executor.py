@@ -400,6 +400,10 @@ class ScheduleExecutor:
 
 def create_executor(queue_manager: ResourceQueueManager, 
                    tracer: ScheduleTracer,
-                   tasks: Dict[str, NNTask]) -> ScheduleExecutor:
+                   tasks: Dict[str, NNTask], mode="default") -> ScheduleExecutor:
     """创建执行器实例的工厂函数"""
-    return ScheduleExecutor(queue_manager, tracer, tasks)
+    if mode == "segment_aware":
+        from .segment_aware_executor import SegmentAwareExecutor
+        return SegmentAwareExecutor(queue_manager, tracer, tasks)
+    else:
+        return ScheduleExecutor(queue_manager, tracer, tasks)

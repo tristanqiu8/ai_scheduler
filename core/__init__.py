@@ -33,6 +33,8 @@ from .schedule_tracer import ScheduleTracer
 # 新架构组件
 from .launcher import TaskLauncher, TaskLaunchConfig, LaunchPlan, LaunchEvent
 from .executor import ScheduleExecutor, TaskInstance, SegmentCompletion
+from .segment_aware_executor import SegmentAwareExecutor
+from .true_segment_scheduler import TrueSegmentScheduler
 from .evaluator import PerformanceEvaluator, TaskPerformanceMetrics, ResourceUtilizationMetrics, OverallPerformanceMetrics
 from .launch_optimizer import LaunchOptimizer, OptimizationConfig, LaunchStrategy
 
@@ -72,6 +74,7 @@ __all__ = [
     
     # Future components (uncomment when ready)
     'ScheduleExecutor',
+    'SegmentAwareExecutor',
     'TaskInstance',
     'SegmentCompletion',
     'PerformanceEvaluator',
