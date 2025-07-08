@@ -17,9 +17,9 @@ from viz.schedule_visualizer import ScheduleVisualizer
 
 # 尝试导入不同的调度器
 try:
-    from core.executor import ScheduleExecutor
-    from core.segment_aware_executor import SegmentAwareExecutor
-    from core.true_segment_scheduler import TrueSegmentScheduler
+    from archive.executor_old import ScheduleExecutor
+    from archive.segment_aware_executor import SegmentAwareExecutor
+    from archive.true_segment_scheduler import TrueSegmentScheduler
 except ImportError:
     try:
         from true_segment_scheduler import TrueSegmentScheduler

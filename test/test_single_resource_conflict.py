@@ -11,7 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.resource_queue import ResourceQueueManager
 from core.schedule_tracer import ScheduleTracer
 from core.launcher import TaskLauncher
-from core.executor import ScheduleExecutor
+from archive.executor_old import ScheduleExecutor
 from core.enums import ResourceType, TaskPriority
 from core.task import create_mixed_task, create_npu_task
 from viz.schedule_visualizer import ScheduleVisualizer
