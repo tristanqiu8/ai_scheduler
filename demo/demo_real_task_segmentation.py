@@ -28,40 +28,32 @@ def prepare_tasks_with_segmentation():
     # T2 (YoloV8nBig) - 设置为强制分段
     t2 = tasks[1]
     t2.segmentation_strategy = SegmentationStrategy.FORCED_SEGMENTATION
+    # 不需要重新定义切分点，real_task.py 中已经定义好了
+    # T2 已经有 4 个切分点：op6, op13, op14, op19
     
-    # 为T2的NPU段添加切分点
-    if len(t2.segments) > 0 and t2.segments[0].resource_type == ResourceType.NPU:
-        npu_seg = t2.segments[0]
-        # 清空现有切分点
-        npu_seg.cut_points = []
-        # 添加切分点，将17.6ms的NPU段在10ms处切分
-        npu_seg.add_cut_point("op10", {60: 10.0}, 0.1)
-    
-    # T3 (Lpr) - 设置为强制分段
+    # T3 (Lpr) - 设置为强制分段  
     t3 = tasks[2]
     t3.segmentation_strategy = SegmentationStrategy.FORCED_SEGMENTATION
+    # 不需要重新定义切分点，real_task.py 中已经定义好了
+    # T3 已经有 3 个切分点：op5, op15, op19
     
-    # 为T3的NPU段添加切分点
-    if len(t3.segments) > 0 and t3.segments[0].resource_type == ResourceType.NPU:
-        npu_seg = t3.segments[0]
-        # 清空现有切分点
-        npu_seg.cut_points = []
-        # 添加切分点，将6.9ms的NPU段在4ms处切分
-        npu_seg.add_cut_point("op5", {60: 4.0}, 0.1)
-    
-    # T5 (tk_search) - 也可以设置为强制分段（可选）
-    # t5 = tasks[4]
-    # t5.segmentation_strategy = SegmentationStrategy.FORCED_SEGMENTATION
+    # 其他任务保持原有策略
+    # T1: NO_SEGMENTATION (CRITICAL任务，不分段)
+    # T4-T8: 根据需要可以设置
     
     # 调试：打印任务段信息
     print("\n调试信息 - 任务段配置:")
-    for i, task in enumerate(tasks[:4]):
+    for i, task in enumerate(tasks[:6]):
         print(f"\n{task.task_id} ({task.segmentation_strategy.value}):")
         for j, seg in enumerate(task.segments):
             print(f"  段{j}: {seg.segment_id}, {seg.resource_type.value}, "
                   f"duration@60={seg.get_duration(60):.1f}ms")
             if seg.cut_points:
                 print(f"    切分点: {[cp.op_id for cp in seg.cut_points]}")
+                # 打印每个切分点的详细信息
+                for cp in seg.cut_points:
+                    if 60 in cp.before_duration_table:
+                        print(f"      {cp.op_id}: before={cp.before_duration_table[60]:.1f}ms@60")
         
         # 应用分段看看结果
         sub_segs = task.apply_segmentation()
@@ -73,6 +65,82 @@ def prepare_tasks_with_segmentation():
     
     return tasks
 
+def verify_launch_plan(launcher, duration=200.0):
+    """验证发射计划是否正确生成了所有任务实例"""
+    plan = launcher.create_launch_plan(duration, "eager")
+    
+    print(f"\n发射计划验证 (时间窗口: {duration}ms):")
+    print(f"总发射事件数: {len(plan.events)}")
+    
+    # 按任务统计
+    task_launches = {}
+    for event in plan.events:
+        if event.task_id not in task_launches:
+            task_launches[event.task_id] = []
+        task_launches[event.task_id].append(event.time)
+    
+    print("\n任务发射详情:")
+    for task_id in sorted(task_launches.keys()):
+        task = launcher.tasks.get(task_id)
+        if task:
+            period = 1000.0 / task.fps_requirement
+            expected_count = int(duration / period)
+            actual_count = len(task_launches[task_id])
+            
+            print(f"\n{task_id} ({task.name}):")
+            print(f"  FPS要求: {task.fps_requirement} (周期: {period:.1f}ms)")
+            print(f"  预期实例数: {expected_count}")
+            print(f"  实际实例数: {actual_count}")
+            print(f"  发射时间: {task_launches[task_id][:5]}{'...' if len(task_launches[task_id]) > 5 else ''}")
+            
+            if actual_count < expected_count:
+                print(f"  ⚠️ 警告: 实例数少于预期!")
+    
+    # 检查最后一个发射时间
+    if plan.events:
+        last_event_time = max(event.time for event in plan.events)
+        print(f"\n最后一个发射时间: {last_event_time:.1f}ms")
+        if last_event_time < duration * 0.8:
+            print(f"⚠️ 警告: 最后的发射时间过早，可能影响执行时长!")
+    
+    return plan
+
+
+def analyze_execution_timeline(tracer, expected_duration=200.0):
+    """分析执行时间线，找出为什么提前结束"""
+    executions = tracer.execution_records
+    
+    if not executions:
+        print("没有执行记录!")
+        return
+    
+    # 找出最后的执行时间
+    last_end_time = max(record['end_time'] for record in executions)
+    
+    print(f"\n执行时间线分析:")
+    print(f"期望执行时长: {expected_duration}ms")
+    print(f"实际最后结束时间: {last_end_time:.1f}ms")
+    print(f"差距: {expected_duration - last_end_time:.1f}ms")
+    
+    # 分析每个资源的最后执行时间
+    resource_last_time = {}
+    for record in executions:
+        res_id = record['resource_id']
+        end_time = record['end_time']
+        if res_id not in resource_last_time or end_time > resource_last_time[res_id]:
+            resource_last_time[res_id] = end_time
+    
+    print("\n各资源最后执行时间:")
+    for res_id, last_time in sorted(resource_last_time.items()):
+        print(f"  {res_id}: {last_time:.1f}ms")
+    
+    # 检查是否有任务在等待但没有被执行
+    stats = tracer.get_statistics()
+    print(f"\n执行统计:")
+    print(f"  总执行次数: {stats['total_executions']}")
+    print(f"  时间跨度: {stats['time_span']:.1f}ms")
+    
+    return last_end_time
 
 def analyze_segmented_tasks():
     """分析分段后的任务特征"""
@@ -137,6 +205,7 @@ def test_single_npu_dsp_baseline():
         # 执行
         duration = 200.0
         plan = launcher.create_launch_plan(duration, "eager")
+        plan = verify_launch_plan(launcher, 200.0)
         executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
         stats = executor.execute_plan(plan, duration, segment_mode=segment_mode)
         
@@ -236,7 +305,7 @@ def test_segmentation_strategies():
         for i in range(3):
             launcher.register_task(tasks[i])
         
-        duration = 100.0
+        duration = 200.0
         plan = launcher.create_launch_plan(duration, "eager")
         executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
         stats = executor.execute_plan(plan, duration, segment_mode=True)
