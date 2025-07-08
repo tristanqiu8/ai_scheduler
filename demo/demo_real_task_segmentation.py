@@ -65,6 +65,7 @@ def prepare_tasks_with_segmentation():
     
     return tasks
 
+
 def verify_launch_plan(launcher, duration=200.0):
     """验证发射计划是否正确生成了所有任务实例"""
     plan = launcher.create_launch_plan(duration, "eager")
@@ -108,14 +109,14 @@ def verify_launch_plan(launcher, duration=200.0):
 
 def analyze_execution_timeline(tracer, expected_duration=200.0):
     """分析执行时间线，找出为什么提前结束"""
-    executions = tracer.execution_records
+    executions = tracer.executions
     
     if not executions:
         print("没有执行记录!")
         return
     
     # 找出最后的执行时间
-    last_end_time = max(record['end_time'] for record in executions)
+    last_end_time = max(exec.end_time for exec in executions)
     
     print(f"\n执行时间线分析:")
     print(f"期望执行时长: {expected_duration}ms")
@@ -124,9 +125,9 @@ def analyze_execution_timeline(tracer, expected_duration=200.0):
     
     # 分析每个资源的最后执行时间
     resource_last_time = {}
-    for record in executions:
-        res_id = record['resource_id']
-        end_time = record['end_time']
+    for exec in executions:
+        res_id = exec.resource_id
+        end_time = exec.end_time
         if res_id not in resource_last_time or end_time > resource_last_time[res_id]:
             resource_last_time[res_id] = end_time
     
@@ -141,6 +142,7 @@ def analyze_execution_timeline(tracer, expected_duration=200.0):
     print(f"  时间跨度: {stats['time_span']:.1f}ms")
     
     return last_end_time
+
 
 def analyze_segmented_tasks():
     """分析分段后的任务特征"""
@@ -188,6 +190,12 @@ def test_single_npu_dsp_baseline():
     # 准备分段后的任务
     tasks = prepare_tasks_with_segmentation()
     
+    # 打印所有任务信息
+    print("注册的任务:")
+    for i, task in enumerate(tasks):
+        print(f"  {i}. {task.task_id} ({task.name}): FPS={task.fps_requirement}, "
+              f"Priority={task.priority.name}, Segments={len(task.segments)}")
+    
     results = {}
     tracers = {}  # 保存tracer用于可视化
     
@@ -209,6 +217,9 @@ def test_single_npu_dsp_baseline():
         executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
         stats = executor.execute_plan(plan, duration, segment_mode=segment_mode)
         
+        # 分析执行时间线
+        analyze_execution_timeline(tracer, duration)
+        
         # 评估性能
         evaluator = PerformanceEvaluator(tracer, launcher.tasks, queue_manager)
         metrics = evaluator.evaluate(duration, plan.events)
@@ -220,7 +231,8 @@ def test_single_npu_dsp_baseline():
             'stats': stats,
             'metrics': metrics,
             'utilization': tracer.get_resource_utilization(),
-            'trace_stats': trace_stats
+            'trace_stats': trace_stats,
+            'evaluator': evaluator  # 保存evaluator对象
         }
         tracers[mode_name] = tracer
         
@@ -231,6 +243,23 @@ def test_single_npu_dsp_baseline():
         print(f"  平均等待时间: {trace_stats['average_wait_time']:.2f}ms")
         print(f"  平均执行时间: {trace_stats['average_execution_time']:.2f}ms")
         print(f"  FPS满足率: {metrics.fps_satisfaction_rate:.1f}%")
+        
+        # 添加各任务的FPS信息
+        print("\n  各任务FPS达成情况:")
+        for task_id, task_metrics in evaluator.task_metrics.items():
+            task = launcher.tasks.get(task_id)
+            if task:
+                achieved_fps = task_metrics.achieved_fps
+                required_fps = task.fps_requirement
+                satisfaction = (achieved_fps / required_fps * 100) if required_fps > 0 else 0
+                completed = task_metrics.instance_count
+                expected = int(duration / (1000.0 / required_fps))
+                
+                print(f"    {task_id} ({task.name}): "
+                      f"要求={required_fps:.1f} FPS, "
+                      f"达成={achieved_fps:.1f} FPS, "
+                      f"满足率={satisfaction:.1f}%, "
+                      f"完成={completed}/{expected}实例")
     
     # 计算提升
     print("\n性能提升分析:")
@@ -248,6 +277,92 @@ def test_single_npu_dsp_baseline():
     
     for metric, value in improvements.items():
         print(f"  {metric}: {value:+.1f}{'%' if metric != '等待时间' else '% (减少)'}")
+    
+    # 分析执行时长
+    print("\n执行时长分析:")
+    for mode_name in ['传统模式', '段级模式']:
+        tracer = tracers[mode_name]
+        stats = tracer.get_statistics()
+        time_span = stats['time_span']
+        print(f"  {mode_name}: 实际执行到 {time_span:.1f}ms")
+        if time_span < duration * 0.9:
+            print(f"    ⚠️ 执行提前结束，可能是因为没有更多任务需要执行")
+    
+    # 打印所有任务的详细执行统计
+    print("\n\n任务执行统计汇总:")
+    print("=" * 115)
+    
+    # 创建任务执行统计
+    task_stats = {}
+    for mode_name in ['传统模式', '段级模式']:
+        task_stats[mode_name] = {}
+        tracer = tracers[mode_name]
+        
+        # 统计每个基础任务的执行次数
+        task_counts = {}
+        for exec in tracer.executions:
+            # 从 T1#0_seg0 中提取基础任务ID T1
+            if '#' in exec.task_id:
+                base_task_id = exec.task_id.split('#')[0]
+                if '_seg' in exec.task_id:
+                    # 只在第一个段时计数，避免重复
+                    if '_seg0' in exec.task_id:
+                        task_counts[base_task_id] = task_counts.get(base_task_id, 0) + 1
+                else:
+                    # 非分段任务
+                    task_counts[base_task_id] = task_counts.get(base_task_id, 0) + 1
+        
+        # 获取任务信息
+        for i, task in enumerate(tasks[:8]):  # 只处理前8个任务
+            task_id = task.task_id
+            task_stats[mode_name][task_id] = {
+                'name': task.name,
+                'fps_req': task.fps_requirement,
+                'period': 1000.0 / task.fps_requirement,
+                'instance_count': task_counts.get(task_id, 0),
+                'expected_count': int(duration / (1000.0 / task.fps_requirement)),
+                'achieved_fps': task_counts.get(task_id, 0) / (duration / 1000.0)
+            }
+    
+    # 打印表格
+    print(f"{'任务':<10} {'名称':<15} {'FPS要求':<10} {'周期(ms)':<10} {'传统模式':<25} {'段级模式':<25}")
+    print(f"{'ID':<10} {'':<15} {'':<10} {'':<10} {'实际FPS':<12} {'完成次数':<13} {'实际FPS':<12} {'完成次数':<13}")
+    print("-" * 115)
+    
+    for task_id in sorted(task_stats['传统模式'].keys()):
+        trad = task_stats['传统模式'][task_id]
+        seg = task_stats['段级模式'][task_id]
+        
+        print(f"{task_id:<10} {trad['name']:<15} {trad['fps_req']:<10.1f} {trad['period']:<10.1f} "
+              f"{trad['achieved_fps']:<12.1f} {trad['instance_count']}/{trad['expected_count']:<11} "
+              f"{seg['achieved_fps']:<12.1f} {seg['instance_count']}/{seg['expected_count']:<11}")
+    
+    # 分析空闲时间
+    print("\n\n资源空闲时间分析:")
+    print("=" * 60)
+    
+    for mode_name in ['传统模式', '段级模式']:
+        print(f"\n{mode_name}:")
+        tracer = tracers[mode_name]
+        timeline = tracer.get_timeline()
+        
+        # 分析NPU_0的空闲时间段
+        if 'NPU_0' in timeline:
+            npu_execs = timeline['NPU_0']
+            print(f"  NPU_0 执行段数: {len(npu_execs)}")
+            
+            # 找出空闲时间段
+            idle_periods = []
+            last_end = 0
+            for exec in npu_execs:
+                if exec.start_time > last_end + 0.1:  # 大于0.1ms的间隔
+                    idle_periods.append((last_end, exec.start_time))
+                last_end = exec.end_time
+            
+            if idle_periods:
+                print(f"  NPU_0 主要空闲时段:")
+                for start, end in idle_periods[:5]:  # 显示前5个
+                    print(f"    {start:.1f}ms - {end:.1f}ms (空闲 {end-start:.1f}ms)")
     
     return results, tracers
 
@@ -287,108 +402,118 @@ def test_segmentation_strategies():
         # 准备任务
         tasks = create_real_tasks()
         
-        # 应用分段策略
+        # 应用策略
         for task_id, strategy in strategy_map.items():
-            for task in tasks:
-                if task.task_id == task_id:
-                    task.segmentation_strategy = strategy
-                    # 如果是强制分段且没有预定义子段，添加默认分段
-                    if strategy == SegmentationStrategy.FORCED_SEGMENTATION and task_id in ["T2", "T3"]:
-                        # 复用之前的分段逻辑
-                        prepare_tasks_with_segmentation()
+            task = next((t for t in tasks if t.task_id == task_id), None)
+            if task:
+                task.segmentation_strategy = strategy
         
         # 执行测试
         tracer = ScheduleTracer(queue_manager)
         launcher = TaskLauncher(queue_manager, tracer)
         
-        # 注册前3个任务
-        for i in range(3):
-            launcher.register_task(tasks[i])
+        for task in tasks[:3]:  # 使用前3个任务
+            launcher.register_task(task)
         
-        duration = 200.0
-        plan = launcher.create_launch_plan(duration, "eager")
+        plan = launcher.create_launch_plan(200.0, "eager")
         executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
-        stats = executor.execute_plan(plan, duration, segment_mode=True)
-        
-        util = tracer.get_resource_utilization()
+        stats = executor.execute_plan(plan, 200.0, segment_mode=True)
         
         print(f"  完成实例: {stats['completed_instances']}")
-        print(f"  NPU利用率: {util.get('NPU_0', 0):.1f}%")
-        print(f"  DSP利用率: {util.get('DSP_0', 0):.1f}%")
+        print(f"  执行段数: {stats['total_segments_executed']}")
+        print(f"  NPU利用率: {tracer.get_resource_utilization().get('NPU_0', 0):.1f}%")
+        print(f"  DSP利用率: {tracer.get_resource_utilization().get('DSP_0', 0):.1f}%")
         print()
 
 
-def test_specific_scenarios():
-    """测试特定场景下的优化效果"""
-    print("\n\n=== 特定场景测试 ===\n")
-    
-    # 创建资源
+def test_scenario_performance(tasks, task_indices, priority_map):
+    """测试特定场景的性能"""
     queue_manager = ResourceQueueManager()
     queue_manager.add_resource("NPU_0", ResourceType.NPU, 60.0)
     queue_manager.add_resource("DSP_0", ResourceType.DSP, 40.0)
     
-    # 准备任务
-    tasks = prepare_tasks_with_segmentation()
+    results = {}
+    
+    for mode_name, segment_mode in [("传统", False), ("段级", True)]:
+        tracer = ScheduleTracer(queue_manager)
+        launcher = TaskLauncher(queue_manager, tracer)
+        
+        # 注册选定的任务
+        for idx in task_indices:
+            task = copy.deepcopy(tasks[idx])
+            # 应用优先级覆盖
+            if task.task_id in priority_map:
+                task.priority = priority_map[task.task_id]
+            launcher.register_task(task)
+        
+        # 执行
+        duration = 200.0
+        plan = launcher.create_launch_plan(duration, "eager")
+        executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
+        stats = executor.execute_plan(plan, duration, segment_mode=segment_mode)
+        
+        util = tracer.get_resource_utilization()
+        trace_stats = tracer.get_statistics()
+        
+        results[mode_name] = {
+            'completed': stats['completed_instances'],
+            'segments': stats['total_segments_executed'],
+            'npu_util': util.get('NPU_0', 0),
+            'dsp_util': util.get('DSP_0', 0),
+            'avg_wait': trace_stats['average_wait_time']
+        }
+    
+    # 显示对比
+    trad = results['传统']
+    seg = results['段级']
+    
+    task_list = [tasks[i].task_id for i in task_indices]
+    seg_info = [f"{tasks[i].task_id}({tasks[i].segmentation_strategy.value[:4]})" for i in task_indices[:3]]
+    
+    print(f"  任务: {seg_info}")
+    print(f"  完成实例: {trad['completed']} → {seg['completed']} "
+          f"(+{seg['completed'] - trad['completed']})")
+    print(f"  执行段数: {trad['segments']} → {seg['segments']}")
+    print(f"  NPU利用率: {trad['npu_util']:.1f}% → {seg['npu_util']:.1f}% "
+          f"(+{seg['npu_util'] - trad['npu_util']:.1f}%)")
+    print(f"  DSP利用率: {trad['dsp_util']:.1f}% → {seg['dsp_util']:.1f}% "
+          f"(+{seg['dsp_util'] - trad['dsp_util']:.1f}%)")
+    print(f"  平均等待: {trad['avg_wait']:.1f}ms → {seg['avg_wait']:.1f}ms "
+          f"(-{trad['avg_wait'] - seg['avg_wait']:.1f}ms)")
+
+
+def test_specific_scenarios():
+    """测试特定场景的优化效果"""
+    print("\n\n=== 特定场景测试 ===\n")
     
     scenarios = [
-        ("场景1: T1+T2+T3 (混合分段)", [0, 1, 2]),
-        ("场景2: 检测任务组合", [1, 2, 3, 4]),
-        ("场景3: 混合负载", [0, 1, 5, 6, 7]),
-        ("场景4: 高优先级T1", [0, 1, 2], {'T1': TaskPriority.HIGH}),
+        {
+            'name': "场景1: T1+T2+T3 基础组合",
+            'tasks': [0, 1, 2],  # T1, T2, T3
+            'priorities': {}
+        },
+        {
+            'name': "场景2: 加入依赖任务",
+            'tasks': [0, 1, 2, 6, 7],  # T1, T2, T3, T7, T8
+            'priorities': {}
+        },
+        {
+            'name': "场景3: 高频任务压力",
+            'tasks': [0, 1, 5],  # T1, T2, T6(高频)
+            'priorities': {}
+        },
+        {
+            'name': "场景4: 高优先级T1",
+            'tasks': [0, 1, 2],
+            'priorities': {'T1': TaskPriority.HIGH}
+        }
     ]
     
-    for scenario_name, task_indices, *priority_override in scenarios:
-        print(f"\n{scenario_name}:")
-        priority_map = priority_override[0] if priority_override else {}
-        
-        results = {}
-        
-        for mode_name, segment_mode in [("传统", False), ("段级", True)]:
-            tracer = ScheduleTracer(queue_manager)
-            launcher = TaskLauncher(queue_manager, tracer)
-            
-            # 注册选定的任务
-            for idx in task_indices:
-                task = copy.deepcopy(tasks[idx])
-                # 应用优先级覆盖
-                if task.task_id in priority_map:
-                    task.priority = priority_map[task.task_id]
-                launcher.register_task(task)
-            
-            # 执行
-            duration = 100.0
-            plan = launcher.create_launch_plan(duration, "eager")
-            executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
-            stats = executor.execute_plan(plan, duration, segment_mode=segment_mode)
-            
-            util = tracer.get_resource_utilization()
-            trace_stats = tracer.get_statistics()
-            
-            results[mode_name] = {
-                'completed': stats['completed_instances'],
-                'segments': stats['total_segments_executed'],
-                'npu_util': util.get('NPU_0', 0),
-                'dsp_util': util.get('DSP_0', 0),
-                'avg_wait': trace_stats['average_wait_time']
-            }
-        
-        # 显示对比
-        trad = results['传统']
-        seg = results['段级']
-        
-        task_list = [tasks[i].task_id for i in task_indices]
-        seg_info = [f"{tasks[i].task_id}({tasks[i].segmentation_strategy.value[:4]})" for i in task_indices[:3]]
-        
-        print(f"  任务: {seg_info}")
-        print(f"  完成实例: {trad['completed']} → {seg['completed']} "
-              f"(+{seg['completed'] - trad['completed']})")
-        print(f"  执行段数: {trad['segments']} → {seg['segments']}")
-        print(f"  NPU利用率: {trad['npu_util']:.1f}% → {seg['npu_util']:.1f}% "
-              f"(+{seg['npu_util'] - trad['npu_util']:.1f}%)")
-        print(f"  DSP利用率: {trad['dsp_util']:.1f}% → {seg['dsp_util']:.1f}% "
-              f"(+{seg['dsp_util'] - trad['dsp_util']:.1f}%)")
-        print(f"  平均等待: {trad['avg_wait']:.1f}ms → {seg['avg_wait']:.1f}ms "
-              f"(-{trad['avg_wait'] - seg['avg_wait']:.1f}ms)")
+    tasks = prepare_tasks_with_segmentation()
+    
+    for scenario in scenarios:
+        print(f"\n{scenario['name']}:")
+        test_scenario_performance(tasks, scenario['tasks'], scenario['priorities'])
 
 
 def generate_visualization():
@@ -400,54 +525,94 @@ def generate_visualization():
     queue_manager.add_resource("NPU_0", ResourceType.NPU, 60.0)
     queue_manager.add_resource("DSP_0", ResourceType.DSP, 40.0)
     
-    # 使用分段后的任务
+    # 准备任务
     tasks = prepare_tasks_with_segmentation()
     
-    # 选择代表性任务：T1, T2(分段), T3(分段)
-    selected_indices = [0, 1, 2]
+    print("\n📋 创建测试任务:")
+    for i, task in enumerate(tasks[:8]):
+        print(f"  ✓ {task.task_id} {task.name}: {task.segments[0].segment_id[:20]}...")
     
-    duration = 100.0  # 增加时间窗口以便观察更多执行
-    
-    # 生成两种模式的可视化
+    # 对两种模式分别生成可视化
     for mode_name, segment_mode in [("traditional", False), ("segment", True)]:
+        print(f"\n================================================================================")
+        print(f"开始执行调度 (max_time=200.0ms, mode={'段级' if segment_mode else '传统'})")
+        print(f"================================================================================\n")
+        
         tracer = ScheduleTracer(queue_manager)
         launcher = TaskLauncher(queue_manager, tracer)
         
-        for idx in selected_indices:
-            launcher.register_task(tasks[idx])
+        # 注册所有8个任务
+        for task in tasks[:8]:
+            launcher.register_task(task)
+            
+        print(f"已注册 {len(launcher.tasks)} 个任务")
         
+        duration = 200.0
         plan = launcher.create_launch_plan(duration, "eager")
         executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
         stats = executor.execute_plan(plan, duration, segment_mode=segment_mode)
         
-        # 检查是否有执行记录
-        if len(tracer.executions) == 0:
-            print(f"\n警告：{mode_name}模式没有执行记录！")
-            continue
+        # 生成可视化
+        visualizer = ScheduleVisualizer(tracer)
         
-        # 打印甘特图
-        print(f"\n{mode_name.upper()} 模式执行时间线:")
-        viz = ScheduleVisualizer(tracer)
-        viz.print_gantt_chart(width=80)
+        print(f"\n{mode_name.upper()} 模式执行时间线:\n")
         
-        # 显示一些统计信息
+        # 打印文本甘特图（显示完整的200ms时间线）
+        # 保存原始的end_time，然后设置为duration以显示完整时间线
+        original_end_time = tracer.end_time
+        if tracer.end_time is not None and tracer.end_time < duration:
+            tracer.end_time = duration
+        
+        visualizer.print_gantt_chart(width=100)
+        
+        # 恢复原始end_time
+        tracer.end_time = original_end_time
+        
+        # 显示统计信息
         trace_stats = tracer.get_statistics()
         print(f"\n统计信息:")
-        print(f"  执行数: {len(tracer.executions)}")
+        print(f"  执行数: {stats['total_segments_executed']}")
         print(f"  时间跨度: {trace_stats['time_span']:.1f}ms")
         print(f"  资源利用率: NPU={tracer.get_resource_utilization().get('NPU_0', 0):.1f}%, "
               f"DSP={tracer.get_resource_utilization().get('DSP_0', 0):.1f}%")
         
-        # 生成文件
-        if len(tracer.executions) > 0:
-            viz.plot_resource_timeline(f"segmented_tasks_{mode_name}.png")
-            viz.export_chrome_tracing(f"segmented_tasks_{mode_name}.json")
+        # 统计任务执行次数
+        task_counts = {}
+        for exec in tracer.executions:
+            if '#' in exec.task_id:
+                base_task_id = exec.task_id.split('#')[0]
+                if '_seg0' in exec.task_id or '_seg' not in exec.task_id:
+                    task_counts[base_task_id] = task_counts.get(base_task_id, 0) + 1
+        
+        print(f"\n任务执行次数:")
+        for task_id in sorted(task_counts.keys()):
+            task = next((t for t in tasks if t.task_id == task_id), None)
+            if task:
+                expected = int(duration / (1000.0 / task.fps_requirement))
+                print(f"  {task_id}: {task_counts[task_id]}/{expected} (FPS要求: {task.fps_requirement})")
+        
+        # 生成图片时也确保显示完整时间线
+        # 临时修改tracer的时间范围以显示完整的200ms
+        original_start_time = tracer.start_time
+        original_end_time = tracer.end_time
+        
+        if tracer.start_time is None or tracer.start_time > 0:
+            tracer.start_time = 0
+        if tracer.end_time is None or tracer.end_time < duration:
+            tracer.end_time = duration
             
-            print(f"\n生成文件:")
-            print(f"  - segmented_tasks_{mode_name}.png")
-            print(f"  - segmented_tasks_{mode_name}.json")
-        else:
-            print(f"\n跳过文件生成（无执行数据）")
+        visualizer.plot_resource_timeline(f"segmented_tasks_{mode_name}.png", figsize=(16, 6), dpi=100)
+        
+        # 恢复原始时间
+        tracer.start_time = original_start_time
+        tracer.end_time = original_end_time
+        
+        # 保存追踪数据
+        visualizer.export_chrome_tracing(f"segmented_tasks_{mode_name}.json")
+        
+        print(f"\n生成文件:")
+        print(f"  - segmented_tasks_{mode_name}.png")
+        print(f"  - segmented_tasks_{mode_name}.json")
 
 
 def main():
