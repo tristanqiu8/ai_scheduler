@@ -12,6 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.resource_queue import ResourceQueueManager
 from core.schedule_tracer import ScheduleTracer
 from core.launcher import TaskLauncher
+from core.enhanced_launcher import EnhancedTaskLauncher  # 使用增强版本
 from core.executor import ScheduleExecutor
 from core.enums import ResourceType, TaskPriority, SegmentationStrategy
 from core.evaluator import PerformanceEvaluator
@@ -115,7 +116,7 @@ def test_single_npu_dsp_baseline():
         print(f"\n{mode_name}:")
         
         tracer = ScheduleTracer(queue_manager)
-        launcher = TaskLauncher(queue_manager, tracer)
+        launcher = EnhancedTaskLauncher(queue_manager, tracer)
         
         # 注册所有任务，确保每个任务都能执行
         for task in tasks:
@@ -220,7 +221,7 @@ def generate_visualization():
     
     for mode_name, segment_mode in [("segment", True)]:
         tracer = ScheduleTracer(queue_manager)
-        launcher = TaskLauncher(queue_manager, tracer)
+        launcher = EnhancedTaskLauncher(queue_manager, tracer)
         
         # 注册所有任务
         for task in tasks:

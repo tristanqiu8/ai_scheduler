@@ -26,7 +26,7 @@ def create_real_tasks():
             (ResourceType.NPU, {20: 0.997, 40: 0.626, 120: 0.379}, "npu_s3"),
             (ResourceType.DSP, {40: 1.5}, "dsp_s2"),
             (ResourceType.NPU, {20: 0.484, 40: 0.285, 120: 0.153}, "npu_s4"),
-            (ResourceType.DSP, {40: 2.0}, "dsp_s3"),
+            (ResourceType.DSP, {40: 2.0}, "dsp_s3"),  # 40GB/s NPU-11.28ms, DSP-
         ],
         priority=TaskPriority.CRITICAL,
         runtime_type=RuntimeType.ACPU_RUNTIME,
@@ -41,7 +41,7 @@ def create_real_tasks():
         "T2", "YoloV8nBig",
         priority=TaskPriority.NORMAL,
         runtime_type=RuntimeType.ACPU_RUNTIME,
-        segmentation_strategy=SegmentationStrategy.ADAPTIVE_SEGMENTATION
+        segmentation_strategy=SegmentationStrategy.FORCED_SEGMENTATION
     )
     # 添加NPU主段
     task2.add_segment(ResourceType.NPU, {20: 23.494, 40: 13.684, 120: 7.411}, "main")
@@ -64,7 +64,7 @@ def create_real_tasks():
         "T3", "YoloV8nSmall",
         priority=TaskPriority.NORMAL,
         runtime_type=RuntimeType.ACPU_RUNTIME,
-        segmentation_strategy=SegmentationStrategy.ADAPTIVE_SEGMENTATION
+        segmentation_strategy=SegmentationStrategy.FORCED_SEGMENTATION
     )
     task3.add_segment(ResourceType.NPU, {20: 5.689, 40: 3.454, 120: 2.088}, "main")
     task3.add_segment(ResourceType.DSP, {40: 1.957}, "postprocess")
@@ -111,7 +111,7 @@ def create_real_tasks():
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
-    task6.set_performance_requirements(fps=100, latency=10)
+    task6.set_performance_requirements(fps=60, latency=16.6)
     tasks.append(task6)
     print("  ✓ T6 reid: 高频NPU任务")
     
@@ -128,8 +128,8 @@ def create_real_tasks():
     tasks.append(task7)
     print("  ✓ T7 pose2d: NPU任务 (依赖T1)")
     
-    # 任务8: 图像质量评估
-    task8 = create_mixed_task(
+    # 任务8: motr post处理 - qim
+    task8 = create_mixed_task(  
         "T8", "qim",
         segments=[
             (ResourceType.DSP, {40: 0.995, 120: 0.968}, "dsp_sub"),
@@ -143,6 +143,19 @@ def create_real_tasks():
     task8.add_dependency("T1")  # 依赖MOTR
     tasks.append(task8)
     print("  ✓ T8 qim: DSP+NPU混合任务 (依赖T1)")
+    
+    # 任务9： pose2d to 3d
+    task9 = create_dsp_task(
+        "T9", "pose2d_to_3d",
+        {40: 9.382, 120: 9.337},
+        priority=TaskPriority.NORMAL,
+        runtime_type=RuntimeType.ACPU_RUNTIME,
+        segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
+    )
+    task9.set_performance_requirements(fps=25, latency=40)
+    task9.add_dependency("T7")  # 依赖pose2d任务
+    tasks.append(task9)
+    print("  ✓ T9 pose2d-to-3d: Pure DSP task (依赖T7)")
     
     return tasks
 

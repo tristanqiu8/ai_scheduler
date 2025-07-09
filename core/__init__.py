@@ -32,6 +32,7 @@ from .schedule_tracer import ScheduleTracer
 
 # 新架构组件
 from .launcher import TaskLauncher, TaskLaunchConfig, LaunchPlan, LaunchEvent
+from .enhanced_launcher import EnhancedTaskLauncher  # 新增
 from .executor import ScheduleExecutor, create_executor, TaskInstance, SegmentCompletion
 from .evaluator import PerformanceEvaluator, TaskPerformanceMetrics, ResourceUtilizationMetrics, OverallPerformanceMetrics
 from .launch_optimizer import LaunchOptimizer, OptimizationConfig, LaunchStrategy
@@ -65,7 +66,8 @@ __all__ = [
     'ScheduleTracer',
     
     # Launcher components
-    'TaskLauncher', 
+    'TaskLauncher',
+    'EnhancedTaskLauncher',  # 新增增强型任务启动器
     'TaskLaunchConfig', 
     'LaunchPlan',
     'LaunchEvent',
