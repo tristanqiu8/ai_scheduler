@@ -8,7 +8,7 @@ class CutPoint:
     op_id: str  # Operation ID (e.g., "op1", "op10", "op23")
     # Duration table for the segment BEFORE this cut point
     before_duration_table: Dict[float, float]  # {BW: duration} for segment before cut
-    overhead_ms: float = 0.15  # Overhead introduced by cutting at this point
+    overhead_ms: float = 0.0  # Overhead introduced by cutting at this point
     status: CutPointStatus = CutPointStatus.AUTO
 
 @dataclass
