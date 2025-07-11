@@ -18,15 +18,15 @@ def create_real_tasks():
     task1 = create_mixed_task(
         "T1", "MOTR",
         segments=[
-            (ResourceType.DSP, {20: 0.316, 40: 0.305, 120: 0.368}, "dsp_s0"),
-            (ResourceType.NPU, {20: 0.430, 40: 0.303, 120: 0.326}, "npu_s1"),
-            (ResourceType.NPU, {20: 12.868, 40: 7.506, 120: 4.312}, "npu_s2"),
-            (ResourceType.DSP, {20: 1.734, 40: 1.226, 120: 0.994}, "dsp_s1"),
-            (ResourceType.NPU, {20: 0.997, 40: 0.374, 120: 0.211}, "npu_s3"),
-            (ResourceType.DSP, {20: 1.734, 40: 1.201, 120: 0.943}, "dsp_s2"),
-            (ResourceType.NPU, {20: 0.602, 40: 0.373, 120: 0.209}, "npu_s4"),
-            (ResourceType.DSP, {20: 1.690, 40: 1.208, 120: 0.975}, "dsp_s3"),
-            (ResourceType.NPU, {20: 0.596, 40: 0.223, 120: 0.134}, "npu_s4"),
+            (ResourceType.NPU, {20: 0.652, 40: 0.410, 120: 0.249}, "npu_s0"),
+            (ResourceType.DSP, {40: 1.2}, "dsp_s0"),
+            (ResourceType.NPU, {20: 0.998, 40: 0.626, 120: 0.379}, "npu_s1"),
+            (ResourceType.NPU, {20: 16.643, 40: 9.333, 120: 5.147}, "npu_s2"),
+            (ResourceType.DSP, {40: 2.2}, "dsp_s1"),
+            (ResourceType.NPU, {20: 0.997, 40: 0.626, 120: 0.379}, "npu_s3"),
+            (ResourceType.DSP, {40: 1.5}, "dsp_s2"),
+            (ResourceType.NPU, {20: 0.484, 40: 0.285, 120: 0.153}, "npu_s4"),
+            (ResourceType.DSP, {40: 2.0}, "dsp_s3"),  # 40GB/s NPU-11.28ms, DSP-
         ],
         priority=TaskPriority.CRITICAL,
         runtime_type=RuntimeType.ACPU_RUNTIME,
@@ -132,8 +132,8 @@ def create_real_tasks():
     task8 = create_mixed_task(  
         "T8", "qim",
         segments=[
-            (ResourceType.NPU, {10: 1.339, 20: 0.758, 40: 0.474, 80: 0.32, 120: 0.292}, "npu_sub"),
-            (ResourceType.DSP, {10: 1.238, 20: 1.122, 40: 1.04, 80: 1, 120: 1.014}, "dsp_sub"),
+            (ResourceType.DSP, {40: 0.995, 120: 0.968}, "dsp_sub"),
+            (ResourceType.NPU, {40: 0.656, 120: 0.89}, "npu_sub"),
         ],
         priority=TaskPriority.LOW,
         runtime_type=RuntimeType.ACPU_RUNTIME,
@@ -154,7 +154,7 @@ def create_real_tasks():
     )
     task9.set_performance_requirements(fps=25, latency=40)
     task9.add_dependency("T7")  # 依赖pose2d任务
-    # tasks.append(task9)
+    tasks.append(task9)
     print("  ✓ T9 pose2d-to-3d: Pure DSP task (依赖T7)")
     
     return tasks

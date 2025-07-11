@@ -23,7 +23,7 @@ import copy
 import numpy as np
 
 
-def compute_resource_demand(tasks, bandwidth_npu=60.0, bandwidth_dsp=40.0, time_window_ms=1000.0):
+def compute_resource_demand(tasks, bandwidth_npu=40.0, bandwidth_dsp=40.0, time_window_ms=1000.0):
     """
     计算在给定带宽下，指定时间窗口内NPU和DSP的总资源需求
     
@@ -117,7 +117,7 @@ def compute_resource_demand(tasks, bandwidth_npu=60.0, bandwidth_dsp=40.0, time_
     }
 
 
-def print_resource_demand_analysis(tasks, bandwidth_npu=60.0, bandwidth_dsp=40.0):
+def print_resource_demand_analysis(tasks, bandwidth_npu=40.0, bandwidth_dsp=40.0):
     """
     打印资源需求分析报告
     
@@ -194,7 +194,7 @@ def analyze_bandwidth_scenarios(tasks):
     
     scenarios = [
         ("低带宽", 30.0, 20.0),
-        ("中带宽", 60.0, 40.0),
+        ("中带宽", 40.0, 40.0),
         ("高带宽", 120.0, 80.0),
     ]
     
@@ -382,7 +382,7 @@ def print_execution_gap_analysis(tracer, window_ms=200.0):
                   f"平均{avg_duration:.1f}ms/次")
 
 
-def compare_theory_vs_actual(tasks, tracer, bandwidth_npu=60.0, bandwidth_dsp=40.0, window_ms=200.0):
+def compare_theory_vs_actual(tasks, tracer, bandwidth_npu=40.0, bandwidth_dsp=40.0, window_ms=200.0):
     """
     比较理论需求和实际执行的差异
     
@@ -525,7 +525,7 @@ def test_single_npu_dsp_baseline():
     
     # 创建资源
     queue_manager = ResourceQueueManager()
-    queue_manager.add_resource("NPU_0", ResourceType.NPU, 60.0)
+    queue_manager.add_resource("NPU_0", ResourceType.NPU, 40.0)
     queue_manager.add_resource("DSP_0", ResourceType.DSP, 40.0)
     
     # 准备分段后的任务
@@ -647,7 +647,7 @@ def check_task_fps_requirements():
     
     # 创建资源
     queue_manager = ResourceQueueManager()
-    queue_manager.add_resource("NPU_0", ResourceType.NPU, 60.0)
+    queue_manager.add_resource("NPU_0", ResourceType.NPU, 40.0)
     queue_manager.add_resource("DSP_0", ResourceType.DSP, 40.0)
     
     # 准备任务
@@ -655,7 +655,7 @@ def check_task_fps_requirements():
     
     # 打印任务FPS要求
     print("任务FPS要求:")
-    for task in tasks[:9]:  # 显示T1-T9
+    for task in tasks:  # 显示T1-T9
         instances_needed = int(task.fps_requirement * 0.2)  # 200ms内需要的实例数
         print(f"  {task.task_id} ({task.name}): {task.fps_requirement} FPS → {instances_needed} 实例/200ms")
 
@@ -666,7 +666,7 @@ def generate_visualization():
     
     # 创建资源
     queue_manager = ResourceQueueManager()
-    queue_manager.add_resource("NPU_0", ResourceType.NPU, 60.0)
+    queue_manager.add_resource("NPU_0", ResourceType.NPU, 40.0)
     queue_manager.add_resource("DSP_0", ResourceType.DSP, 40.0)
     
     # 准备任务
@@ -764,7 +764,7 @@ def main():
     
     # 1.5 分析资源需求（新增）
     tasks = prepare_tasks_with_segmentation()
-    print_resource_demand_analysis(tasks, bandwidth_npu=60.0, bandwidth_dsp=40.0)
+    print_resource_demand_analysis(tasks, bandwidth_npu=40.0, bandwidth_dsp=40.0)
     analyze_bandwidth_scenarios(tasks)
     
     # 2. 基准测试
@@ -774,7 +774,7 @@ def main():
     if '段级模式' in tracers:
         print_execution_gap_analysis(tracers['段级模式'], window_ms=200.0)
         compare_theory_vs_actual(tasks, tracers['段级模式'], 
-                               bandwidth_npu=60.0, bandwidth_dsp=40.0, window_ms=200.0)
+                               bandwidth_npu=40.0, bandwidth_dsp=40.0, window_ms=200.0)
     
     # 3. 检查FPS要求满足情况
     check_task_fps_requirements()
