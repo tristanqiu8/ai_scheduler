@@ -133,8 +133,8 @@ def print_resource_demand_analysis(tasks, bandwidth_npu=40.0, bandwidth_dsp=40.0
     analysis = compute_resource_demand(tasks, bandwidth_npu, bandwidth_dsp)
     
     print(f"\n配置:")
-    print(f"  NPU带宽: {analysis['bandwidth']['npu']} Mbps")
-    print(f"  DSP带宽: {analysis['bandwidth']['dsp']} Mbps")
+    print(f"  NPU带宽: {analysis['bandwidth']['npu']} Gbps")
+    print(f"  DSP带宽: {analysis['bandwidth']['dsp']} Gbps")
     print(f"  时间窗口: {analysis['time_window_ms']} ms")
     
     print(f"\n总资源需求:")
@@ -531,38 +531,7 @@ def test_single_npu_dsp_baseline():
     # 准备分段后的任务
     tasks = prepare_tasks_with_segmentation()
     
-    # 打印所有任务信息
-    print("📋 创建测试任务:")
-    for task in tasks:
-        if len(task.segments) > 1:
-            # 混合任务
-            resource_counts = {}
-            for seg in task.segments:
-                rt = seg.resource_type.value
-                resource_counts[rt] = resource_counts.get(rt, 0) + 1
-            
-            desc_parts = []
-            if "DSP" in resource_counts:
-                desc_parts.append(f"{resource_counts['DSP']} DSP")
-            if "NPU" in resource_counts:
-                desc_parts.append(f"{resource_counts['NPU']} NPU")
-            
-            desc = f"{len(task.segments)}段混合任务 ({' + '.join(desc_parts)})"
-        else:
-            # 单段任务
-            desc = f"纯{task.segments[0].resource_type.value}任务"
-        
-        print(f"  ✓ {task.task_id} {task.name}: {desc}")
-        
-        # 添加特殊说明
-        if task.task_id == "T6":
-            print(f"     (高频NPU任务)")
-        elif task.task_id == "T7":
-            print(f"     (NPU任务，依赖T1)")
-        elif task.task_id == "T8":
-            print(f"     (DSP+NPU混合任务，依赖T1)")
-        elif task.task_id == "T9":
-            print(f"     (Pure DSP task，依赖T7)")
+    # 打印所有任务信息...（省略不变的部分）
     
     results = {}
     tracers = {}
@@ -586,7 +555,7 @@ def test_single_npu_dsp_baseline():
         stats = executor.execute_plan(plan, duration, segment_mode=segment_mode)
         
         # 分析执行时间线
-        trace_stats = tracer.get_statistics()
+        trace_stats = tracer.get_statistics(time_window=duration)  # 传入时间窗口
         
         # 评估性能
         evaluator = PerformanceEvaluator(tracer, launcher.tasks, queue_manager)
@@ -595,10 +564,13 @@ def test_single_npu_dsp_baseline():
         # 计算系统利用率
         system_util = calculate_system_utilization(tracer, duration)
         
+        # 获取一致的资源利用率（使用时间窗口）
+        resource_utilization = tracer.get_resource_utilization(time_window=duration)
+        
         results[mode_name] = {
             'stats': stats,
             'metrics': metrics,
-            'utilization': tracer.get_resource_utilization(),
+            'utilization': resource_utilization,  # 使用一致的计算
             'system_utilization': system_util,
             'trace_stats': trace_stats,
             'evaluator': evaluator
@@ -607,11 +579,11 @@ def test_single_npu_dsp_baseline():
         
         print(f"  完成实例: {stats['completed_instances']}")
         print(f"  执行段数: {stats['total_segments_executed']}")
-        print(f"  NPU利用率: {results[mode_name]['utilization']['NPU_0']:.1f}%")
-        print(f"  DSP利用率: {results[mode_name]['utilization']['DSP_0']:.1f}%")
+        print(f"  NPU利用率: {resource_utilization.get('NPU_0', 0):.1f}%")
+        print(f"  DSP利用率: {resource_utilization.get('DSP_0', 0):.1f}%")
         print(f"  System利用率: {system_util:.1f}%")
         print(f"  平均等待时间: {metrics.avg_wait_time:.2f}ms")
-        print(f"  FPS满足率: {metrics.fps_satisfaction_rate*100:.1f}%")
+        print(f"  FPS满足率: {metrics.fps_satisfaction_rate:.1f}%")
     
     # 性能对比
     print("\n性能提升分析:")
@@ -679,7 +651,7 @@ def generate_visualization():
     # 打印任务注册信息
     print("📋 创建测试任务:")
     for task in tasks:
-        launcher.register_task(task)
+        launcher.register_task(task)  # ← 关键！必须注册任务
         if len(task.segments) > 1:
             print(f"  ✓ {task.task_id} {task.name}: {len(task.segments)}段混合任务")
         else:
@@ -701,9 +673,6 @@ def generate_visualization():
     
     # 生成时间线图
     print("\nSEGMENT 模式执行时间线:\n")
-    print("\n" + "="*100)
-    print("Schedule Timeline (Total: 200.0ms)")
-    print("="*100)
     visualizer.print_gantt_chart(width=100)
     
     # 生成图表文件
@@ -716,14 +685,27 @@ def generate_visualization():
     # 生成Chrome Trace JSON
     visualizer.export_chrome_tracing(json_filename)
     
-    # 打印统计信息
-    trace_stats = tracer.get_statistics()
+    # 打印统计信息（使用一致的时间窗口）
+    trace_stats = tracer.get_statistics(time_window=duration)
+    resource_utilization = tracer.get_resource_utilization(time_window=duration)
+    system_util = calculate_system_utilization(tracer, duration)
+    
     print(f"\n统计信息:")
     print(f"  执行数: {trace_stats['total_executions']}")
     print(f"  时间跨度: {trace_stats['time_span']:.1f}ms")
-    print(f"  资源利用率: NPU={trace_stats['resource_utilization']['NPU_0']:.1f}%, "
-          f"DSP={trace_stats['resource_utilization']['DSP_0']:.1f}%, "
-          f"System={calculate_system_utilization(tracer, duration):.1f}%")
+    print(f"  资源利用率: NPU={resource_utilization.get('NPU_0', 0):.1f}%, "
+          f"DSP={resource_utilization.get('DSP_0', 0):.1f}%, "
+          f"System={system_util:.1f}%")
+    
+    # 验证利用率的逻辑一致性
+    max_resource_util = max(resource_utilization.values()) if resource_utilization else 0
+    print(f"\n利用率验证:")
+    print(f"  最高单资源利用率: {max_resource_util:.1f}%")
+    print(f"  System利用率: {system_util:.1f}%")
+    if system_util >= max_resource_util - 0.1:  # 允许0.1%的误差
+        print(f"  ✓ 逻辑一致性检查通过")
+    else:
+        print(f"  ✗ 警告：System利用率低于最高资源利用率！")
     
     # 检查任务执行情况
     evaluator = PerformanceEvaluator(tracer, launcher.tasks, queue_manager)

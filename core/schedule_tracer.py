@@ -191,15 +191,31 @@ class ScheduleTracer:
         """获取特定任务的执行时间线"""
         return [e for e in self.executions if e.task_id == task_id]
     
-    def get_resource_utilization(self) -> Dict[str, float]:
-        """计算资源利用率"""
-        if not self.executions:
-            return {}
+    def get_resource_utilization(self, time_window: float = None) -> Dict[str, float]:
+        """
+        计算资源利用率
+        
+        Args:
+            time_window: 时间窗口，如果为None则使用实际执行时间跨度
             
-        # 计算实际时间跨度
-        actual_start = min(e.start_time for e in self.executions)
-        actual_end = max(e.end_time for e in self.executions)
-        total_time = actual_end - actual_start
+        Returns:
+            资源利用率字典
+        """
+        if not self.executions and not self.queue_manager:
+            return {}
+        
+        # 确定时间基准
+        if time_window is None:
+            # 使用实际执行时间跨度
+            if self.executions:
+                actual_start = min(e.start_time for e in self.executions)
+                actual_end = max(e.end_time for e in self.executions)
+                total_time = actual_end - actual_start
+            else:
+                total_time = 0
+        else:
+            # 使用指定的时间窗口
+            total_time = time_window
         
         if total_time <= 0:
             return {}
@@ -217,8 +233,13 @@ class ScheduleTracer:
         
         return utilization
     
-    def get_statistics(self) -> Dict[str, Any]:
-        """获取调度统计信息"""
+    def get_statistics(self, time_window: float = None) -> Dict[str, Any]:
+        """
+        获取调度统计信息
+        
+        Args:
+            time_window: 时间窗口，用于计算资源利用率
+        """
         # 计算实际时间跨度
         if self.executions:
             actual_start = min(e.start_time for e in self.executions)
@@ -231,7 +252,7 @@ class ScheduleTracer:
             "total_tasks": len(self.task_info),
             "total_executions": len(self.executions),
             "time_span": time_span,
-            "resource_utilization": self.get_resource_utilization(),
+            "resource_utilization": self.get_resource_utilization(time_window),
             "tasks_by_priority": defaultdict(int),
             "average_wait_time": 0,
             "average_execution_time": 0

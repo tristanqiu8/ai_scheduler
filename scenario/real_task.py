@@ -154,7 +154,7 @@ def create_real_tasks():
     )
     task9.set_performance_requirements(fps=25, latency=40)
     task9.add_dependency("T7")  # 依赖pose2d任务
-    # tasks.append(task9)
+    tasks.append(task9)
     print("  ✓ T9 pose2d-to-3d: Pure DSP task (依赖T7)")
     
     return tasks

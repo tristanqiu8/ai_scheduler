@@ -36,6 +36,7 @@ from .enhanced_launcher import EnhancedTaskLauncher  # 新增
 from .executor import ScheduleExecutor, create_executor, TaskInstance, SegmentCompletion
 from .evaluator import PerformanceEvaluator, TaskPerformanceMetrics, ResourceUtilizationMetrics, OverallPerformanceMetrics
 from .launch_optimizer import LaunchOptimizer, OptimizationConfig, LaunchStrategy
+from .scheduling_config import SchedulingConfig, ScenarioType
 
 __all__ = [
     # Enums
@@ -64,6 +65,8 @@ __all__ = [
     'ResourceQueueManager', 
     'QueuedTask',
     'ScheduleTracer',
+    'SchedulingConfig',
+    'ScenarioType',
     
     # Launcher components
     'TaskLauncher',
