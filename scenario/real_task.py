@@ -14,6 +14,27 @@ def create_real_tasks():
     
     print("\n📋 创建测试任务:")
     
+    # fps_table = {"T1": 25,
+    #              "T2": 10,
+    #              "T3": 10, 
+    #              "T4": 5,
+    #              "T5": 25,
+    #              "T6": 60,
+    #              "T7": 25,
+    #              "T8": 25,
+    #              "T9": 25
+    #              }
+    fps_table = {"T1": 33,
+                 "T2": 13,
+                 "T3": 13, 
+                 "T4": 7,
+                 "T5": 33,
+                 "T6": 80,
+                 "T7": 33,
+                 "T8": 33,
+                 "T9": 33
+                 }
+    
     # 任务1: MOTR - 多目标跟踪（关键任务）
     task1 = create_mixed_task(
         "T1", "MOTR",
@@ -32,7 +53,7 @@ def create_real_tasks():
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
-    task1.set_performance_requirements(fps=25, latency=40)
+    task1.set_performance_requirements(fps=fps_table['T1'], latency=1000.0/fps_table['T1'])
     tasks.append(task1)
     print("  ✓ T1 MOTR: 9段混合任务 (4 DSP + 5 NPU)")
     
@@ -55,7 +76,7 @@ def create_real_tasks():
         ("op14", {20: 14.096, 40: 8.210, 120: 4.447}, 0.0), # 60%处
         ("op19", {20: 18.795, 40: 10.947, 120: 5.929}, 0.0) # 80%处
     ])
-    task2.set_performance_requirements(fps=10, latency=100)
+    task2.set_performance_requirements(fps=fps_table['T2'], latency=1000.0/fps_table['T2'])
     tasks.append(task2)
     print("  ✓ T2 YoloV8nBig: 可分段NPU+DSP任务")
     
@@ -75,7 +96,7 @@ def create_real_tasks():
         ("op15", {20: 2.276, 40: 1.382, 120: 0.835}, 0.0),  # 40%处
         ("op19", {20: 4.551, 40: 2.763, 120: 1.670}, 0.0)   # 80%处
     ])
-    task3.set_performance_requirements(fps=10, latency=100)
+    task3.set_performance_requirements(fps=fps_table['T3'], latency=1000.0/fps_table['T3'])
     tasks.append(task3)
     print("  ✓ T3 YoloV8nSmall: 可分段NPU+DSP任务")
     
@@ -87,7 +108,7 @@ def create_real_tasks():
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
-    task4.set_performance_requirements(fps=5, latency=200)
+    task4.set_performance_requirements(fps=fps_table['T4'], latency=1000.0/fps_table['T4'])
     tasks.append(task4)
     print("  ✓ T4 tk_temp: 纯NPU任务")
     
@@ -99,7 +120,7 @@ def create_real_tasks():
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
-    task5.set_performance_requirements(fps=25, latency=40)
+    task5.set_performance_requirements(fps=fps_table['T5'], latency=1000.0/fps_table['T5'])
     tasks.append(task5)
     print("  ✓ T5 tk_search: 纯NPU任务")
     
@@ -111,7 +132,7 @@ def create_real_tasks():
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
-    task6.set_performance_requirements(fps=60, latency=16.6)
+    task6.set_performance_requirements(fps=fps_table['T6'], latency=1000.0/fps_table['T6'])
     tasks.append(task6)
     print("  ✓ T6 reid: 高频NPU任务")
     
@@ -123,7 +144,7 @@ def create_real_tasks():
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
-    task7.set_performance_requirements(fps=25, latency=40)
+    task7.set_performance_requirements(fps=fps_table['T7'], latency=1000.0/fps_table['T7'])
     task7.add_dependency("T1")  # 依赖MOTR的检测结果
     tasks.append(task7)
     print("  ✓ T7 pose2d: NPU任务 (依赖T1)")
@@ -139,20 +160,27 @@ def create_real_tasks():
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
-    task8.set_performance_requirements(fps=25, latency=40)
+    task8.set_performance_requirements(fps=fps_table['T8'], latency=1000.0/fps_table['T8'])
     task8.add_dependency("T1")  # 依赖MOTR
     tasks.append(task8)
     print("  ✓ T8 qim: DSP+NPU混合任务 (依赖T1)")
     
     # 任务9： pose2d to 3d
-    task9 = create_dsp_task(
+    # task9 = create_dsp_task(
+    #     "T9", "pose2d_to_3d",
+    #     {40: 9.382, 120: 9.337},
+    #     priority=TaskPriority.NORMAL,
+    #     runtime_type=RuntimeType.ACPU_RUNTIME,
+    #     segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
+    # )
+    task9 = create_npu_task(
         "T9", "pose2d_to_3d",
-        {40: 9.382, 120: 9.337},
+        {20: 0.16, 40: 0.15, 80: 0.13, 120: 0.13},
         priority=TaskPriority.NORMAL,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
-    task9.set_performance_requirements(fps=25, latency=40)
+    task9.set_performance_requirements(fps=fps_table['T9'], latency=1000.0/fps_table['T9'])
     task9.add_dependency("T7")  # 依赖pose2d任务
     tasks.append(task9)
     print("  ✓ T9 pose2d-to-3d: Pure DSP task (依赖T7)")
