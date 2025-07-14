@@ -22,6 +22,27 @@ from viz.schedule_visualizer import ScheduleVisualizer
 import copy
 import numpy as np
 
+# 添加FPS窗口计算功能
+def gcd(a, b):
+    """计算两个数的最大公约数"""
+    while b:
+        a, b = b, a % b
+    return a
+
+def gcd_multiple(numbers):
+    """计算多个数的最大公约数"""
+    from functools import reduce
+    return reduce(gcd, numbers)
+
+def calculate_optimal_window(fps_requirements, max_window_ms=1000.0):
+    """基于FPS要求计算最优分析时间窗口"""
+    if not fps_requirements:
+        return 200.0
+    
+    fps_gcd = gcd_multiple(fps_requirements)
+    gcd_window = 1000.0 / fps_gcd
+    return min(gcd_window, max_window_ms)
+
 
 def compute_resource_demand(tasks, bandwidth_npu=40.0, bandwidth_dsp=40.0, time_window_ms=1000.0):
     """
@@ -117,7 +138,7 @@ def compute_resource_demand(tasks, bandwidth_npu=40.0, bandwidth_dsp=40.0, time_
     }
 
 
-def print_resource_demand_analysis(tasks, bandwidth_npu=40.0, bandwidth_dsp=40.0):
+def print_resource_demand_analysis(tasks, bandwidth_npu=40.0, bandwidth_dsp=40.0, time_window_ms=1000.0):
     """
     打印资源需求分析报告
     
@@ -130,7 +151,7 @@ def print_resource_demand_analysis(tasks, bandwidth_npu=40.0, bandwidth_dsp=40.0
     print("📊 资源需求分析（1秒内）")
     print("="*80)
     
-    analysis = compute_resource_demand(tasks, bandwidth_npu, bandwidth_dsp)
+    analysis = compute_resource_demand(tasks, bandwidth_npu, bandwidth_dsp, time_window_ms)
     
     print(f"\n配置:")
     print(f"  NPU带宽: {analysis['bandwidth']['npu']} Gbps")
@@ -519,9 +540,9 @@ def analyze_segmented_tasks():
     print("- 其他任务保持 NO_SEGMENTATION 策略")
 
 
-def test_single_npu_dsp_baseline():
+def test_single_npu_dsp_baseline(time_window=200.0):
     """测试单NPU+单DSP的基准性能"""
-    print("\n\n=== 基准测试：单NPU + 单DSP (所有任务) ===\n")
+    print(f"\n\n=== 基准测试：单NPU + 单DSP (时间窗口: {time_window:.1f}ms) ===\n")
     
     # 创建资源
     queue_manager = ResourceQueueManager()
@@ -548,7 +569,7 @@ def test_single_npu_dsp_baseline():
             launcher.register_task(task)
         
         # 执行
-        duration = 200.0
+        duration = time_window
         plan = launcher.create_launch_plan(duration, "eager")
         
         executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
@@ -613,7 +634,7 @@ def test_single_npu_dsp_baseline():
     return results, tracers
 
 
-def check_task_fps_requirements():
+def check_task_fps_requirements(time_window=200.0):
     """检查FPS要求满足情况"""
     print("\n\n=== FPS要求满足情况分析 ===\n")
     
@@ -628,11 +649,11 @@ def check_task_fps_requirements():
     # 打印任务FPS要求
     print("任务FPS要求:")
     for task in tasks:  # 显示T1-T9
-        instances_needed = int(task.fps_requirement * 0.2)  # 200ms内需要的实例数
-        print(f"  {task.task_id} ({task.name}): {task.fps_requirement} FPS → {instances_needed} 实例/200ms")
+        instances_needed = task.fps_requirement * (time_window / 1000.0)
+        print(f"  {task.task_id} ({task.name}): {task.fps_requirement} FPS → {instances_needed:.1f} 实例/{time_window:.0f}ms")
 
 
-def generate_visualization():
+def generate_visualization(time_window=200.0):
     """生成可视化图表"""
     print("\n\n=== 生成可视化 ===\n")
     
@@ -658,7 +679,7 @@ def generate_visualization():
             print(f"  ✓ {task.task_id} {task.name}: 纯{task.segments[0].resource_type.value}任务")
     
     # 执行
-    duration = 200.0
+    duration = time_window
     plan = launcher.create_launch_plan(duration, "eager")
     
     print(f"\n{'='*100}")
@@ -676,8 +697,8 @@ def generate_visualization():
     visualizer.print_gantt_chart(width=100)
     
     # 生成图表文件
-    filename = "segmented_tasks_segment.png"
-    json_filename = "segmented_tasks_segment.json"
+    filename = f"segmented_tasks_segment_{int(time_window)}ms.png"
+    json_filename = f"segmented_tasks_segment_{int(time_window)}ms.json"
     
     # 生成PNG图表
     visualizer.plot_resource_timeline(filename)
@@ -724,11 +745,11 @@ def generate_visualization():
             completed = evaluator.task_completion_count.get(task_id, 0)
             actual_fps = (completed * 1000.0 / duration) if duration > 0 else 0
         
-        expected = int(task.fps_requirement * duration / 1000.0)
+        expected = task.fps_requirement * (duration / 1000.0)
         fps_rate = (actual_fps / task.fps_requirement * 100) if task.fps_requirement > 0 else 0
         
         status = "✓" if fps_rate >= 100 else "✗"
-        print(f"  {task_id}: {completed}/{expected} "
+        print(f"  {task_id}: {completed}/{expected:.1f} "
               f"(FPS要求: {task.fps_requirement}) {status}")
     
     print(f"\n生成文件:")
@@ -741,28 +762,38 @@ def main():
     print("DEMO: 真实任务段级调度优化")
     print("=" * 115)
     
+    # 0. 计算最优时间窗口
+    tasks = prepare_tasks_with_segmentation()
+    fps_requirements = [task.fps_requirement for task in tasks]
+    optimal_window = calculate_optimal_window(fps_requirements, max_window_ms=1000.0)
+    
+    print(f"\n📊 时间窗口分析:")
+    print(f"  FPS要求: {fps_requirements}")
+    print(f"  最大公约数: {gcd_multiple(fps_requirements)}")
+    print(f"  选择的窗口: {optimal_window:.1f}ms")
+    
     # 1. 分析分段策略
     analyze_segmented_tasks()
     
     # 1.5 分析资源需求（新增）
     tasks = prepare_tasks_with_segmentation()
-    print_resource_demand_analysis(tasks, bandwidth_npu=40.0, bandwidth_dsp=40.0)
+    print_resource_demand_analysis(tasks, bandwidth_npu=40.0, bandwidth_dsp=40.0, time_window_ms=optimal_window)
     analyze_bandwidth_scenarios(tasks)
     
     # 2. 基准测试
-    baseline_results, tracers = test_single_npu_dsp_baseline()
+    baseline_results, tracers = test_single_npu_dsp_baseline(optimal_window)
     
     # 2.5 分析执行空隙（新增）
     if '段级模式' in tracers:
-        print_execution_gap_analysis(tracers['段级模式'], window_ms=200.0)
+        print_execution_gap_analysis(tracers['段级模式'], window_ms=optimal_window)
         compare_theory_vs_actual(tasks, tracers['段级模式'], 
-                               bandwidth_npu=40.0, bandwidth_dsp=40.0, window_ms=200.0)
+                               bandwidth_npu=40.0, bandwidth_dsp=40.0, window_ms=optimal_window)
     
     # 3. 检查FPS要求满足情况
-    check_task_fps_requirements()
+    check_task_fps_requirements(optimal_window)
     
     # 4. 生成可视化
-    generate_visualization()
+    generate_visualization(optimal_window)
     
     # 总结
     print("\n\n" + "=" * 115)
