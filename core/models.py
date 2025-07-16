@@ -52,7 +52,7 @@ class ResourceSegment:
         return self.duration_table[closest_bw]
     
     def add_cut_point(self, op_id: str, before_duration_table: Dict[float, float], 
-                      overhead_ms: float = 0.15):
+                      overhead_ms: float = 0.0):
         """Add a cut point to this segment with duration info
         
         Args:

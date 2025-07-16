@@ -27,20 +27,22 @@ def create_real_tasks():
                  "Stereo4x": 10,
                  "Skywater": 10,
                  "PeakDetector": 10,
-                 "Skywater_Big": 30
+                 "Skywater_Big1": 10,
+                 "Skywater_Big2": 10,
+                 "Skywater_Big3": 10,
                  }
     
     # 任务1: 3A Parsing
     task1 = NNTask(
         "T1", "Parsing",
-        priority=TaskPriority.NORMAL,
+        priority=TaskPriority.HIGH,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
     # 添加NPU主段
-    task1.add_segment(ResourceType.NPU, {20: 1.63, 40: 1.16, 80: 0.93, 120: 0.90}, "main")
+    task1.add_segment(ResourceType.NPU, {20: 1.63, 40: 1.156, 80: 0.93, 120: 0.90}, "main")
     # 添加DSP后处理段
-    task1.add_segment(ResourceType.DSP, {20: 0.48, 40: 0.46, 80: 0.46, 120: 0.45}, "postprocess")
+    task1.add_segment(ResourceType.DSP, {20: 0.48, 40: 0.455, 80: 0.46, 120: 0.45}, "postprocess")
     task1.set_performance_requirements(fps=fps_table[task1.name], latency=1000.0/fps_table[task1.name])
     tasks.append(task1)
     print("  ✓ T1 Parsing: 3A中频NPU+DSP任务")
@@ -48,7 +50,7 @@ def create_real_tasks():
     # 任务2: 重识别（高频任务）
     task2 = create_npu_task(
         "T2", "ReID",
-        {20: 1.06, 40: 0.72, 80: 0.59, 120: 0.631},
+        {20: 1.06, 40: 0.716, 80: 0.59, 120: 0.631},
         priority=TaskPriority.HIGH,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
@@ -69,12 +71,17 @@ def create_real_tasks():
             (ResourceType.DSP, {20: 1.734, 40: 1.201, 120: 0.943}, "dsp_s2"),
             (ResourceType.NPU, {20: 0.602, 40: 0.373, 120: 0.209}, "npu_s4"),
             (ResourceType.DSP, {20: 1.690, 40: 1.208, 120: 0.975}, "dsp_s3"),
-            (ResourceType.NPU, {20: 0.596, 40: 0.223, 120: 0.134}, "npu_s4"),
+            (ResourceType.NPU, {20: 0.596, 40: 0.321, 120: 0.134}, "npu_s4"),
         ],
-        priority=TaskPriority.CRITICAL,
+        priority=TaskPriority.HIGH,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
+    task3.add_cut_points_to_segment("npu_s2", [
+        ("cut1", {40: 2.5}, 0.0),   # simulated
+        ("cut2", {40: 2.5}, 0.0),  # simulated
+        # 50-100%: 自动计算剩余部分
+    ])
     task3.set_performance_requirements(fps=fps_table[task3.name], latency=1000.0/fps_table[task3.name])
     tasks.append(task3)
     print("  ✓ T3 MOTR: 9段混合任务 (4 DSP + 5 NPU)")
@@ -86,7 +93,7 @@ def create_real_tasks():
             (ResourceType.NPU, {10: 1.339, 20: 0.758, 40: 0.474, 80: 0.32, 120: 0.292}, "npu_sub"),
             (ResourceType.DSP, {10: 1.238, 20: 1.122, 40: 1.04, 80: 1, 120: 1.014}, "dsp_sub"),
         ],
-        priority=TaskPriority.LOW,
+        priority=TaskPriority.NORMAL,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
@@ -158,10 +165,11 @@ def create_real_tasks():
     
     # 为主段添加切分点
     task9.add_cut_points_to_segment("main", [
-        ("op6", {20: 4.699, 40: 2.737, 120: 1.482}, 0.0),   # 20%处
-        ("op13", {20: 9.398, 40: 5.474, 120: 2.964}, 0.0),  # 40%处
-        ("op14", {20: 14.096, 40: 8.210, 120: 4.447}, 0.0), # 60%处
-        ("op19", {20: 18.795, 40: 10.947, 120: 5.929}, 0.0) # 80%处
+        ("op6", {20: 4.699, 40: 2.737, 120: 1.482}, 0.0),      # 0-20%: 4.699
+        ("op13", {20: 4.699, 40: 2.737, 120: 1.482}, 0.0),     # 20-40%: 9.398-4.699=4.699
+        ("op14", {20: 4.698, 40: 2.736, 120: 1.483}, 0.0),     # 40-60%: 14.096-9.398=4.698
+        ("op19", {20: 4.699, 40: 2.737, 120: 1.482}, 0.0)      # 60-80%: 18.795-14.096=4.699
+        # 80-100%: 20.28-18.795=1.485 (自动计算)
     ])
     task9.set_performance_requirements(fps=fps_table[task9.name], latency=1000.0/fps_table[task9.name])
     tasks.append(task9)
@@ -179,9 +187,10 @@ def create_real_tasks():
     
     # 添加切分点
     task10.add_cut_points_to_segment("main", [
-        ("op5", {20: 1.138, 40: 0.691, 120: 0.418}, 0.0),   # 20%处
-        ("op15", {20: 2.276, 40: 1.382, 120: 0.835}, 0.0),  # 40%处
-        ("op19", {20: 4.551, 40: 2.763, 120: 1.670}, 0.0)   # 80%处
+        ("op5", {20: 1.138, 40: 0.691, 120: 0.418}, 0.0),      # 0-20%: 1.138
+        ("op15", {20: 1.138, 40: 0.691, 120: 0.417}, 0.0),     # 20-40%: 2.276-1.138=1.138
+        ("op19", {20: 2.275, 40: 1.381, 120: 0.835}, 0.0)      # 40-80%: 4.551-2.276=2.275
+        # 80-100%: 5.02-4.551=0.469 (自动计算)
     ])
     task10.set_performance_requirements(fps=fps_table[task10.name], latency=1000.0/fps_table[task10.name])
     tasks.append(task10)
@@ -200,10 +209,15 @@ def create_real_tasks():
             (ResourceType.NPU, {20: 1.456, 40: 1.115, 80: 0.932, 120: 0.924}, "npu_s3"), #scale
             (ResourceType.NPU, {20: 8.780, 40: 6.761, 80: 5.712, 120: 5.699}, "npu_s4"), #scale
         ],
-        priority=TaskPriority.CRITICAL,
+        priority=TaskPriority.HIGH,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
+    task11.add_cut_points_to_segment("npu_s4", [
+        ("cut1", {40: 2.111}, 0.0),   # simulated
+        ("cut1", {40: 2.222}, 0.0),  # simulated
+        # 50-100%: 自动计算剩余部分
+    ])
     task11.set_performance_requirements(fps=fps_table[task11.name], latency=65.0)
     tasks.append(task11)
     print("  ✓ T11 Stereo4x: 8段混合任务 (3 DSP + 5 NPU)")
@@ -220,10 +234,11 @@ def create_real_tasks():
     
     # 添加切分点
     task12.add_cut_points_to_segment("main", [
-        ("op4", {20: 0.924, 40: 0.596, 80: 0.456, 120: 0.408}, 0.0),   # 40%处
-        ("op14", {20: 1.201, 40: 0.775, 80: 0.593, 120: 0.530}, 0.0),  # 50%处
+        ("op4", {20: 0.924, 40: 0.596, 80: 0.456, 120: 0.408}, 0.0),   # 0-40%
+        ("op14", {20: 0.277, 40: 0.179, 80: 0.137, 120: 0.122}, 0.0),  # 40-50%: 差值计算
+        # 50-100%: 自动计算剩余部分
     ])
-    task12.set_performance_requirements(fps=fps_table[task12.name], latency=70.0)
+    task12.set_performance_requirements(fps=fps_table[task12.name], latency=100.0)
     tasks.append(task12)
     print("  ✓ T12 Skywater: 可分段NPU+DSP任务")
     
@@ -241,8 +256,8 @@ def create_real_tasks():
     
     # 任务14: Skywater 大模型
     task14 = NNTask(
-        "T14", "Skywater_Big",
-        priority=TaskPriority.NORMAL,
+        "T14", "Skywater_Big1",
+        priority=TaskPriority.HIGH,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.FORCED_SEGMENTATION
     )
@@ -251,12 +266,55 @@ def create_real_tasks():
     
     # 添加切分点
     task14.add_cut_points_to_segment("main", [
-        ("op4", {20: 1.676, 40: 0.996, 80: 0.680, 120: 0.668}, 0.0),   # 40%处
-        ("op14", {20: 2.179, 40: 1.295, 80: 0.884, 120: 0.868}, 0.0),  # 50%处
+        ("op4", {20: 1.676, 40: 0.996, 80: 0.680, 120: 0.668}, 0.0),   # 0-40%
+        ("op14", {20: 0.503, 40: 0.299, 80: 0.204, 120: 0.200}, 0.0),  # 40-50%: 差值计算
+        # 50-100%: 自动计算剩余部分
     ])
-    task14.set_performance_requirements(fps=fps_table[task12.name], latency=1000.0/fps_table[task12.name])
+    # task14.set_performance_requirements(fps=fps_table[task14.name], latency=1000.0/fps_table[task14.name])
+    task14.set_performance_requirements(fps=fps_table[task14.name], latency=34.0)
     tasks.append(task14)
     print("  ✓ T14 Skywater Mono: 可分段NPU+DSP任务")
+    
+    # 任务15: Skywater 大模型
+    task15 = NNTask(
+        "T15", "Skywater_Big2",
+        priority=TaskPriority.HIGH,
+        runtime_type=RuntimeType.ACPU_RUNTIME,
+        segmentation_strategy=SegmentationStrategy.FORCED_SEGMENTATION
+    )
+    task15.add_segment(ResourceType.NPU, {20: 4.19, 40: 2.49, 80: 1.70, 120: 1.67}, "main")
+    task15.add_segment(ResourceType.DSP, {20: 1.52, 40: 0.90, 80: 0.58, 120: 0.58}, "postprocess")
+    
+    # 添加切分点
+    task15.add_cut_points_to_segment("main", [
+        ("op4", {20: 1.676, 40: 0.996, 80: 0.680, 120: 0.668}, 0.0),   # 0-40%
+        ("op14", {20: 0.503, 40: 0.299, 80: 0.204, 120: 0.200}, 0.0),  # 40-50%: 差值计算
+        # 50-100%: 自动计算剩余部分
+    ])
+    # task14.set_performance_requirements(fps=fps_table[task14.name], latency=1000.0/fps_table[task14.name])
+    task15.set_performance_requirements(fps=fps_table[task15.name], latency=34.0)
+    tasks.append(task15)
+    print("  ✓ T14 Skywater Mono: 可分段NPU+DSP任务")
+    
+    # 任务16: Skywater 大模型
+    task16 = NNTask(
+        "T16", "Skywater_Big3",
+        priority=TaskPriority.HIGH,
+        runtime_type=RuntimeType.ACPU_RUNTIME,
+        segmentation_strategy=SegmentationStrategy.FORCED_SEGMENTATION
+    )
+    task16.add_segment(ResourceType.NPU, {20: 4.19, 40: 2.49, 80: 1.70, 120: 1.67}, "main")
+    task16.add_segment(ResourceType.DSP, {20: 1.52, 40: 0.90, 80: 0.58, 120: 0.58}, "postprocess")
+    
+    # 添加切分点
+    task16.add_cut_points_to_segment("main", [
+        ("op4", {20: 1.676, 40: 0.996, 80: 0.680, 120: 0.668}, 0.0),   # 0-40%
+        ("op14", {20: 0.503, 40: 0.299, 80: 0.204, 120: 0.200}, 0.0),  # 40-50%: 差值计算
+        # 50-100%: 自动计算剩余部分
+    ])
+    task16.set_performance_requirements(fps=fps_table[task16.name], latency=34.0)
+    tasks.append(task16)
+    print("  ✓ T16 Skywater Mono3: 可分段NPU+DSP任务")
     
     return tasks
 
