@@ -30,6 +30,7 @@ def create_real_tasks():
                  "Skywater_Big1": 10,
                  "Skywater_Big2": 10,
                  "Skywater_Big3": 10,
+                 "BonusTask": 50,
                  }
     
     # 任务1: 3A Parsing
@@ -315,6 +316,18 @@ def create_real_tasks():
     task16.set_performance_requirements(fps=fps_table[task16.name], latency=34.0)
     tasks.append(task16)
     print("  ✓ T16 Skywater Mono3: 可分段NPU+DSP任务")
+
+    # 任务17: 模板匹配
+    task17 = create_npu_task(
+        "T17", "BonusTask",
+        {40: 1.5},
+        priority=TaskPriority.LOW,
+        runtime_type=RuntimeType.ACPU_RUNTIME,
+        segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
+    )
+    task17.set_performance_requirements(fps=fps_table[task17.name], latency=1000.0/fps_table[task6.name])
+    tasks.append(task17)
+    print("  ✓ T17 BonusTask: 奖励任务")
     
     return tasks
 

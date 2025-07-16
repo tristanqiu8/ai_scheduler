@@ -299,7 +299,7 @@ class EnhancedTaskLauncher:
                 if config.min_interval >= time_window:
                     max_instances = 1
                 else:
-                    max_instances = int(time_window / config.min_interval)
+                    max_instances = int(time_window / config.min_interval) + 1
                     
                 # 为每个实例规划发射时间
                 for instance in range(max_instances):
