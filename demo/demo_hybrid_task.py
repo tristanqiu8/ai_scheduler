@@ -122,7 +122,9 @@ def test_scheduling_modes(time_window=1000.0):
             launcher.register_task(task)
         
         # 创建发射计划
-        plan = launcher.create_launch_plan(time_window, "eager")
+        plan = launcher.create_launch_plan(time_window, "balanced")
+        # plan = launcher.create_launch_plan(time_window, "eager")
+
         
         # 执行
         executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
