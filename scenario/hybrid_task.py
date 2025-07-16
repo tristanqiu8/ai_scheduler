@@ -75,7 +75,7 @@ def create_real_tasks():
         ],
         priority=TaskPriority.HIGH,
         runtime_type=RuntimeType.ACPU_RUNTIME,
-        segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
+        segmentation_strategy=SegmentationStrategy.FORCED_SEGMENTATION
     )
     task3.add_cut_points_to_segment("npu_s2", [
         ("cut1", {40: 2.5}, 0.0),   # simulated
@@ -93,7 +93,7 @@ def create_real_tasks():
             (ResourceType.NPU, {10: 1.339, 20: 0.758, 40: 0.474, 80: 0.32, 120: 0.292}, "npu_sub"),
             (ResourceType.DSP, {10: 1.238, 20: 1.122, 40: 1.04, 80: 1, 120: 1.014}, "dsp_sub"),
         ],
-        priority=TaskPriority.NORMAL,
+        priority=TaskPriority.HIGH,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
@@ -211,7 +211,7 @@ def create_real_tasks():
         ],
         priority=TaskPriority.HIGH,
         runtime_type=RuntimeType.ACPU_RUNTIME,
-        segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
+        segmentation_strategy=SegmentationStrategy.FORCED_SEGMENTATION
     )
     task11.add_cut_points_to_segment("npu_s4", [
         ("cut1", {40: 2.111}, 0.0),   # simulated
