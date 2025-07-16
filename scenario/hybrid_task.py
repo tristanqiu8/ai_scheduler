@@ -17,7 +17,7 @@ def create_real_tasks():
     fps_table = {"Parsing": 60,
                  "ReID": 100,
                  "MOTR": 25,
-                 "QIM": 25,
+                 "qim": 25,
                  "pose2d": 25,
                  "tk_template": 5,
                  "tk_search": 25,
@@ -146,7 +146,7 @@ def create_real_tasks():
         
     # 任务9: YOLOv8n 大模型
     task9 = NNTask(
-        "T9", "YoloV8nBig",
+        "T9", "Yolov8nBig",
         priority=TaskPriority.NORMAL,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.FORCED_SEGMENTATION
@@ -169,7 +169,7 @@ def create_real_tasks():
     
     # 任务10: YOLOv8n 小模型
     task10 = NNTask(
-        "T10", "YoloV8nSmall",
+        "T10", "Yolov8nSmall",
         priority=TaskPriority.NORMAL,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.FORCED_SEGMENTATION
