@@ -156,31 +156,99 @@ def test_scheduling_modes(time_window=1000.0):
 
 
 def analyze_latency_performance(results):
-    """分析延迟性能"""
-    print("\n\n📈 延迟性能分析")
-    print("=" * 100)
+    """分析并打印延迟性能，包含优先级信息"""
+    print("\n\n📊 延迟性能分析")
+    print("=" * 140)
     
     for mode_name, data in results.items():
         evaluator = data['evaluator']
+        metrics = data['metrics']
         
         print(f"\n{mode_name}:")
-        print(f"{'任务ID':<8} {'任务名':<15} {'FPS要求':<10} {'实际FPS':<10} "
-              f"{'延迟要求':<12} {'平均延迟':<12} {'最大延迟':<12} {'满足率':<10}")
-        print("-" * 100)
+        print("-" * 140)
         
+        # 表头 - 增加优先级列并改善对齐
+        print(f"{'任务ID':<8} {'任务名':<15} {'优先级':<10} {'FPS要求':<10} {'实际FPS':<10} "
+              f"{'延迟要求':<12} {'平均延迟':<12} {'最大延迟':<12} {'满足率':<10}")
+        print("-" * 140)
+        
+        # 收集任务信息并排序（按任务ID排序）
+        task_items = []
         for task_id, metrics in evaluator.task_metrics.items():
             # 获取对应的任务对象
             task = next((t for t in evaluator.tasks.values() if t.task_id == task_id), None)
             if not task:
                 continue
-            
+            task_items.append((task_id, task, metrics))
+        
+        # 按任务ID排序
+        task_items.sort(key=lambda x: int(x[0][1:]) if x[0][1:].isdigit() else x[0])
+        
+        # 打印每个任务的信息
+        for task_id, task, metrics in task_items:
             fps_status = "✓" if metrics.fps_satisfaction else "✗"
             latency_status = "✓" if metrics.latency_satisfaction_rate > 0.9 else "✗"
             
-            print(f"{task_id:<8} {task.name:<15} {metrics.fps_requirement:<10.0f} "
-                  f"{metrics.achieved_fps:<9.1f}{fps_status} "
-                  f"{metrics.latency_requirement:<12.1f} {metrics.avg_latency:<12.1f} "
-                  f"{metrics.max_latency:<12.1f} {metrics.latency_satisfaction_rate:<9.1%}{latency_status}")
+            # 格式化优先级显示
+            priority_str = task.priority.name
+            
+            # 格式化数值，确保对齐
+            print(f"{task_id:<10} {task.name:<18} {priority_str:<14} "
+                  f"{metrics.fps_requirement:<12.0f} "
+                  f"{metrics.achieved_fps:<11.1f}{fps_status} "
+                  f"{metrics.latency_requirement:<15.1f} "
+                  f"{metrics.avg_latency:<15.1f} "
+                  f"{metrics.max_latency:<15.1f} "
+                  f"{metrics.latency_satisfaction_rate:<9.1%}{latency_status}")
+
+def analyze_latency_performance_v2(results):
+    """分析并打印延迟性能 - 更美观的版本"""
+    print("\n\n📊 延迟性能分析")
+    print("=" * 150)
+    
+    for mode_name, data in results.items():
+        evaluator = data['evaluator']
+        metrics = data['metrics']
+        
+        print(f"\n{mode_name}:")
+        print("-" * 150)
+        
+        # 使用固定宽度格式化表头
+        header = (
+            f"{'任务ID':^8} | {'任务名':^15} | {'优先级':^10} | "
+            f"{'FPS要求':^10} | {'实际FPS':^12} | "
+            f"{'延迟要求(ms)':^14} | {'平均延迟(ms)':^14} | {'最大延迟(ms)':^14} | "
+            f"{'满足率':^10}"
+        )
+        print(header)
+        print("-" * 150)
+        
+        # 收集并排序任务
+        task_items = []
+        for task_id, metrics in evaluator.task_metrics.items():
+            task = next((t for t in evaluator.tasks.values() if t.task_id == task_id), None)
+            if not task:
+                continue
+            task_items.append((task_id, task, metrics))
+        
+        task_items.sort(key=lambda x: int(x[0][1:]) if x[0][1:].isdigit() else x[0])
+        
+        # 打印任务信息
+        for task_id, task, metrics in task_items:
+            fps_ok = metrics.fps_satisfaction
+            latency_ok = metrics.latency_satisfaction_rate > 0.9
+            
+            # 使用颜色符号表示状态
+            fps_str = f"{metrics.achieved_fps:>8.1f} {'✓' if fps_ok else '✗'}"
+            rate_str = f"{metrics.latency_satisfaction_rate:>8.1%} {'✓' if latency_ok else '✗'}"
+            
+            row = (
+                f"{task_id:^8} | {task.name:^15} | {task.priority.name:^10} | "
+                f"{metrics.fps_requirement:^10.0f} | {fps_str:^12} | "
+                f"{metrics.latency_requirement:^14.1f} | {metrics.avg_latency:^14.1f} | "
+                f"{metrics.max_latency:^14.1f} | {rate_str:^10}"
+            )
+            print(row)
 
 
 def print_detailed_task_analysis(results, task_id):
@@ -275,6 +343,8 @@ def main():
     
     # 4. 分析延迟性能
     analyze_latency_performance(results)
+    # analyze_latency_performance_v2(results)
+    
     
     # 5. 分析关键任务的详细性能
     critical_tasks = ["T11", "T12", "T14"]  # Stereo4x 和 Skywater 系列
