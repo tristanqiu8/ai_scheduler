@@ -15,7 +15,7 @@ def create_real_tasks():
     print("\n📋 创建测试任务:")
     
     fps_table = {"Parsing": 60,
-                 "ReID": 100,
+                 "ReID": 25,
                  "MOTR": 25,
                  "qim": 25,
                  "pose2d": 25,
@@ -51,12 +51,13 @@ def create_real_tasks():
     # 任务2: 重识别（高频任务）
     task2 = create_npu_task(
         "T2", "ReID",
-        {20: 1.06, 40: 0.716, 80: 0.59, 120: 0.631},
+        # {20: 1.06, 40: 0.716, 80: 0.59, 120: 0.631},
+        {20: 4.24, 40: 2.864, 80: 2.56, 120: 2.52},
         priority=TaskPriority.LOW,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
-    task2.set_performance_requirements(fps=fps_table[task2.name], latency=100.0)
+    task2.set_performance_requirements(fps=fps_table[task2.name], latency=50.0)
     tasks.append(task2)
     print("  ✓ T2 ReID: 高频NPU任务")
     
