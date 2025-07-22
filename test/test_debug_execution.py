@@ -3,9 +3,14 @@
 调试为什么任务发射后没有执行
 """
 
+import pytest
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 仅在直接运行时添加路径
+if __name__ == "__main__":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 from core import (
     ResourceType, TaskPriority, NNTask,
@@ -25,7 +30,7 @@ def debug_simple_execution():
     queue_manager = ResourceQueueManager()
     queue_manager.add_resource("NPU_0", ResourceType.NPU, 60.0)
     
-    print("\n✓ 资源创建完成")
+    print("\n[OK] 资源创建完成")
     print(f"  资源队列: {list(queue_manager.resource_queues.keys())}")
     
     # 2. 创建追踪器和发射器
@@ -37,7 +42,7 @@ def debug_simple_execution():
     simple_task.add_segment(ResourceType.NPU, {60: 5.0}, "main")
     simple_task.set_performance_requirements(fps=10, latency=100)
     
-    print("\n✓ 任务创建完成")
+    print("\n[OK] 任务创建完成")
     print(f"  任务: {simple_task.task_id}")
     print(f"  段数: {len(simple_task.segments)}")
     print(f"  第一段: {simple_task.segments[0].resource_type.value}, duration={simple_task.segments[0].duration_table}")
@@ -48,7 +53,7 @@ def debug_simple_execution():
     # 5. 创建发射计划
     plan = launcher.create_launch_plan(50.0, "eager")
     
-    print(f"\n✓ 发射计划创建完成")
+    print(f"\n[OK] 发射计划创建完成")
     print(f"  事件数: {len(plan.events)}")
     for event in plan.events:
         print(f"  - {event.time}ms: {event.task_id}#{event.instance_id}")
@@ -92,7 +97,7 @@ def debug_simple_execution():
         
         # 尝试调度
         print("\n  尝试调度就绪任务...")
-        executor._schedule_ready_segments()
+        executor._schedule_segments_traditional()
         
         # 再次检查队列状态
         print("\n  调度后的队列状态:")
@@ -152,11 +157,11 @@ def debug_launcher_issue():
             cut_overhead=0.0,
             original_segment_id=test_segment.segment_id
         )
-        print("  ✓ SubSegment创建成功")
+        print("  [OK] SubSegment创建成功")
         print(f"    sub_id: {sub_seg.sub_id}")
         print(f"    duration: {sub_seg.get_duration(60)}")
     except Exception as e:
-        print(f"  ✗ SubSegment创建失败: {e}")
+        print(f"  [FAIL] SubSegment创建失败: {e}")
 
 
 if __name__ == "__main__":

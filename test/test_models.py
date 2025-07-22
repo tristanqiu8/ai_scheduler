@@ -3,9 +3,14 @@
 测试 models.py 中的数据结构
 """
 
+import pytest
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 仅在直接运行时添加路径
+if __name__ == "__main__":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 from core.models import (
     CutPoint, SubSegment, ResourceSegment, ResourceUnit, 
@@ -58,14 +63,14 @@ def test_segmentation_with_cuts():
     # 第一段：前30%的工作量
     segment.add_cut_point(
         "op5",
-        before_duration_table={20: 6.0, 40: 3.6, 120: 1.8},
+        perf_lut={20: 6.0, 40: 3.6, 120: 1.8},
         overhead_ms=0.2
     )
     
     # 第二段：中间40%的工作量
     segment.add_cut_point(
         "op10", 
-        before_duration_table={20: 8.0, 40: 4.8, 120: 2.4},
+        perf_lut={20: 8.0, 40: 4.8, 120: 2.4},
         overhead_ms=0.2
     )
     
@@ -133,19 +138,19 @@ def test_complex_task_scenario():
     # 为NPU段添加3个断点，可以分成最多4段
     npu_seg.add_cut_point(
         "conv1_out",
-        before_duration_table={20: 3.0, 40: 1.8, 120: 0.9},
+        perf_lut={20: 3.0, 40: 1.8, 120: 0.9},
         overhead_ms=0.15
     )
     
     npu_seg.add_cut_point(
         "conv2_out",
-        before_duration_table={20: 4.0, 40: 2.4, 120: 1.2},
+        perf_lut={20: 4.0, 40: 2.4, 120: 1.2},
         overhead_ms=0.15
     )
     
     npu_seg.add_cut_point(
         "conv3_out",
-        before_duration_table={20: 5.0, 40: 3.0, 120: 1.5},
+        perf_lut={20: 5.0, 40: 3.0, 120: 1.5},
         overhead_ms=0.15
     )
     

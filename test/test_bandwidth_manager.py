@@ -3,9 +3,14 @@
 测试带宽管理器的功能
 """
 
+import pytest
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 仅在直接运行时添加路径
+if __name__ == "__main__":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 from core.bandwidth_manager import BandwidthManager
 from core.resource_queue import ResourceQueueManager, QueuedTask
@@ -54,7 +59,10 @@ def test_static_vs_dynamic_bandwidth():
     print("  - 4个单元活跃时: 每个获得30带宽")
     print("  - NPU和DSP平等竞争带宽")
     
-    return static_manager, dynamic_manager, bw_manager
+    # Don't return values in pytest functions
+    assert static_manager is not None
+    assert dynamic_manager is not None
+    assert bw_manager is not None
 
 
 def test_bandwidth_allocation_scenario():

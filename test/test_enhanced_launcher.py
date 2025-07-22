@@ -3,9 +3,14 @@
 测试增强发射器的效果，特别是对依赖任务的处理
 """
 
+import pytest
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 仅在直接运行时添加路径
+if __name__ == "__main__":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 from core.resource_queue import ResourceQueueManager
 from core.schedule_tracer import ScheduleTracer

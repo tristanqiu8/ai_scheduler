@@ -3,9 +3,14 @@
 测试 ScheduleTracer 功能
 """
 
+import pytest
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 仅在直接运行时添加路径
+if __name__ == "__main__":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 from core.resource_queue import ResourceQueueManager
 from core.schedule_tracer import ScheduleTracer
@@ -65,9 +70,9 @@ def test_schedule_tracer():
     # 验证统计数据
     assert stats['total_tasks'] == 7, f"Expected 7 tasks, got {stats['total_tasks']}"
     assert stats['total_executions'] == 7, f"Expected 7 executions, got {stats['total_executions']}"
-    print(f"  ✓ 总任务数: {stats['total_tasks']}")
-    print(f"  ✓ 总执行次数: {stats['total_executions']}")
-    print(f"  ✓ 时间跨度: {stats['time_span']:.1f}ms")
+    print(f"  [OK] 总任务数: {stats['total_tasks']}")
+    print(f"  [OK] 总执行次数: {stats['total_executions']}")
+    print(f"  [OK] 时间跨度: {stats['time_span']:.1f}ms")
     
     # 测试资源利用率
     print("\n测试资源利用率计算:")
@@ -83,7 +88,7 @@ def test_schedule_tracer():
     assert priority_dist.get('HIGH', 0) == 2, "Should have 2 HIGH tasks"
     assert priority_dist.get('NORMAL', 0) == 3, "Should have 3 NORMAL tasks"
     assert priority_dist.get('LOW', 0) == 1, "Should have 1 LOW task"
-    print("  ✓ 优先级分布正确")
+    print("  [OK] 优先级分布正确")
     
     # 测试时间线获取
     print("\n测试时间线获取:")
@@ -94,7 +99,7 @@ def test_schedule_tracer():
     assert len(timeline["NPU_0"]) == 3, "NPU_0 should have 3 executions"
     assert len(timeline["NPU_1"]) == 2, "NPU_1 should have 2 executions"
     assert len(timeline["DSP_0"]) == 2, "DSP_0 should have 2 executions"
-    print("  ✓ 时间线数据正确")
+    print("  [OK] 时间线数据正确")
     
     # 测试任务时间线
     print("\n测试任务时间线:")
@@ -102,7 +107,7 @@ def test_schedule_tracer():
     assert len(task1_timeline) == 1, "TASK_1 should have 1 execution"
     assert task1_timeline[0].start_time == 0.0, "TASK_1 should start at 0.0"
     assert task1_timeline[0].end_time == 5.0, "TASK_1 should end at 5.0"
-    print("  ✓ 任务时间线查询正确")
+    print("  [OK] 任务时间线查询正确")
     
     # 测试可视化输出
     print("\n测试可视化输出:")
@@ -110,12 +115,12 @@ def test_schedule_tracer():
     # Matplotlib图表
     visualizer.plot_resource_timeline("test_timeline.png")
     assert os.path.exists("test_timeline.png"), "Timeline plot should be created"
-    print("  ✓ Matplotlib图表生成成功")
+    print("  [OK] Matplotlib图表生成成功")
     
     # Chrome Tracing
     visualizer.export_chrome_tracing("test_trace.json")
     assert os.path.exists("test_trace.json"), "Chrome trace should be created"
-    print("  ✓ Chrome Tracing文件生成成功")
+    print("  [OK] Chrome Tracing文件生成成功")
     
     # 测试边界情况
     print("\n测试边界情况:")
@@ -129,7 +134,7 @@ def test_schedule_tracer():
     empty_viz.print_gantt_chart(width=40)
     empty_stats = empty_tracer.get_statistics()
     assert empty_stats['total_tasks'] == 0, "Empty tracer should have 0 tasks"
-    print("  ✓ 空数据处理正常")
+    print("  [OK] 空数据处理正常")
     
     # 测试单个任务
     single_manager = ResourceQueueManager()
@@ -140,12 +145,11 @@ def test_schedule_tracer():
     single_stats = single_tracer.get_statistics()
     assert single_stats['total_tasks'] == 1, "Should have 1 task"
     assert single_stats['resource_utilization']['TEST_RES'] == 100.0, "Should have 100% utilization"
-    print("  ✓ 单任务处理正常")
+    print("  [OK] 单任务处理正常")
     
-    print("\n✅ 所有测试通过！")
+    print("\n[PASS] 所有测试通过！")
     
     # 清理测试文件
-    import os
     if os.path.exists("test_timeline.png"):
         os.remove("test_timeline.png")
     if os.path.exists("test_trace.json"):

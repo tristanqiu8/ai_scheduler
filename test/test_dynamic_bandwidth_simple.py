@@ -3,9 +3,14 @@
 简化的动态带宽测试 - 直接测试 BandwidthManager
 """
 
+import pytest
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 仅在直接运行时添加路径
+if __name__ == "__main__":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 from core.bandwidth_manager import BandwidthManager
 from core.enums import ResourceType

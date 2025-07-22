@@ -3,9 +3,14 @@
 简化的段执行测试 - 验证段级调度的基本概念
 """
 
+import pytest
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 仅在直接运行时添加路径
+if __name__ == "__main__":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 from typing import Dict, List, Optional
 from dataclasses import dataclass

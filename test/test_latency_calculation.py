@@ -3,11 +3,16 @@
 修复延迟计算问题
 """
 
+import pytest
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core import PerformanceEvaluator
+# 仅在直接运行时添加路径
+if __name__ == "__main__":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+from core.evaluator import PerformanceEvaluator, TaskPerformanceMetrics
 from collections import defaultdict
 
 
@@ -19,7 +24,7 @@ def fixed_evaluate_task_performance(self, launch_events=None):
     """修复后的任务性能评估方法"""
     # 初始化任务指标
     for task_id, task in self.tasks.items():
-        self.task_metrics[task_id] = self.TaskPerformanceMetrics(
+        self.task_metrics[task_id] = TaskPerformanceMetrics(
             task_id=task_id,
             task_name=task.name,
             priority=task.priority,

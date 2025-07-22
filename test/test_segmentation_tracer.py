@@ -4,9 +4,14 @@
 验证分段执行的正确记录和可视化
 """
 
+import pytest
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 仅在直接运行时添加路径
+if __name__ == "__main__":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 from core.resource_queue import ResourceQueueManager
 from core.schedule_tracer import ScheduleTracer

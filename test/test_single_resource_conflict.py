@@ -4,14 +4,19 @@
 验证执行器是否正确处理资源竞争和交替执行
 """
 
+import pytest
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 仅在直接运行时添加路径
+if __name__ == "__main__":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 from core.resource_queue import ResourceQueueManager
 from core.schedule_tracer import ScheduleTracer
 from core.launcher import TaskLauncher
-from archive.executor_old import ScheduleExecutor
+from core.executor import ScheduleExecutor
 from core.enums import ResourceType, TaskPriority
 from core.task import create_mixed_task, create_npu_task
 from viz.schedule_visualizer import ScheduleVisualizer
@@ -93,7 +98,7 @@ def test_single_resource_basic():
     
     # 生成可视化
     visualizer.export_chrome_tracing("single_resource_basic.json")
-    print("\n✓ 生成文件: single_resource_basic.json")
+    print("\n[OK] 生成文件: single_resource_basic.json")
 
 
 def test_resource_conflict_stress():
@@ -247,7 +252,7 @@ def test_real_motr_scenario():
     # 生成可视化
     visualizer.plot_resource_timeline("motr_scenario.png")
     visualizer.export_chrome_tracing("motr_scenario.json")
-    print("\n✓ 生成文件:")
+    print("\n[OK] 生成文件:")
     print("  - motr_scenario.png")
     print("  - motr_scenario.json")
 

@@ -3,9 +3,14 @@
 测试段感知执行功能 - 使用更新后的 ScheduleExecutor
 """
 
+import pytest
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 仅在直接运行时添加路径
+if __name__ == "__main__":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 from core.resource_queue import ResourceQueueManager
 from core.schedule_tracer import ScheduleTracer
@@ -68,7 +73,8 @@ def test_segment_mode_execution():
     visualizer.plot_resource_timeline("segment_mode_execution.png")
     print("\n生成了可视化文件: segment_mode_execution.png")
     
-    return stats
+    # Don't return values in pytest functions
+    assert stats is not None
 
 
 def test_segment_interleaving():
@@ -137,7 +143,8 @@ def test_segment_interleaving():
     print("\n执行时间线:")
     visualizer.print_gantt_chart(width=80)
     
-    return stats
+    # Don't return values in pytest functions
+    assert stats is not None
 
 
 def test_performance_comparison():
@@ -238,7 +245,8 @@ def test_performance_comparison():
     print("  - traditional_mode.png (传统模式)")
     print("  - segment_mode.png (段级模式)")
     
-    return results
+    # Don't return values in pytest functions
+    assert results is not None
 
 
 def test_factory_function():

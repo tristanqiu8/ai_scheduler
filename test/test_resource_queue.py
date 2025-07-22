@@ -4,9 +4,13 @@ resource_queue.py 的单元测试
 测试资源队列的各种功能
 """
 
+import pytest
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 仅在直接运行时添加路径
+if __name__ == "__main__":
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.resource_queue import ResourceQueue, ResourceQueueManager, QueuedTask
 from core.bandwidth_manager import BandwidthManager
