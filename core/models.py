@@ -6,8 +6,8 @@ from core.enums import ResourceType, RuntimeType, CutPointStatus
 class CutPoint:
     """Network cut point definition with duration info"""
     op_id: str  # Operation ID (e.g., "op1", "op10", "op23")
-    # Duration table for the segment BEFORE this cut point
-    before_duration_table: Dict[float, float]  # {BW: duration} for segment before cut
+    # Performance lookup table for the segment BEFORE this cut point
+    perf_lut: Dict[float, float]  # {BW: duration} for segment before cut
     overhead_ms: float = 0.0  # Overhead introduced by cutting at this point
     status: CutPointStatus = CutPointStatus.AUTO
 
@@ -51,18 +51,18 @@ class ResourceSegment:
         closest_bw = min(self.duration_table.keys(), key=lambda x: abs(x - bw))
         return self.duration_table[closest_bw]
     
-    def add_cut_point(self, op_id: str, before_duration_table: Dict[float, float], 
+    def add_cut_point(self, op_id: str, perf_lut: Dict[float, float], 
                       overhead_ms: float = 0.0):
         """Add a cut point to this segment with duration info
         
         Args:
             op_id: Operation ID where to cut
-            before_duration_table: Duration table for the segment BEFORE this cut point
+            perf_lut: Performance lookup table for the segment BEFORE this cut point
             overhead_ms: Overhead introduced by cutting at this point
         """
         cut_point = CutPoint(
             op_id=op_id, 
-            before_duration_table=before_duration_table,
+            perf_lut=perf_lut,
             overhead_ms=overhead_ms
         )
         self.cut_points.append(cut_point)
@@ -96,11 +96,11 @@ class ResourceSegment:
         
         # Create sub-segments for each cut point
         for i, cut_point in enumerate(enabled_cut_points):
-            # The duration table in cut_point defines this sub-segment's duration
+            # The performance lookup table in cut_point defines this sub-segment's duration
             sub_seg = SubSegment(
                 sub_id=f"{self.segment_id}_{i}",
                 resource_type=self.resource_type,
-                duration_table=cut_point.before_duration_table.copy(),
+                duration_table=cut_point.perf_lut.copy(),
                 cut_overhead=cut_point.overhead_ms,
                 original_segment_id=self.segment_id
             )
@@ -110,8 +110,8 @@ class ResourceSegment:
             
             # Update cumulative duration
             for bw in cumulative_duration:
-                if bw in cut_point.before_duration_table:
-                    cumulative_duration[bw] += cut_point.before_duration_table[bw]
+                if bw in cut_point.perf_lut:
+                    cumulative_duration[bw] += cut_point.perf_lut[bw]
         
         # Create final sub-segment with remaining duration
         final_duration_table = {}

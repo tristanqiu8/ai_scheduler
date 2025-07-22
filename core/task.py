@@ -93,8 +93,8 @@ class NNTask:
         """
         segment = self.get_segment_by_id(segment_id)
         if segment:
-            for op_id, before_duration_table, overhead_ms in cut_points:
-                segment.add_cut_point(op_id, before_duration_table, overhead_ms)
+            for op_id, perf_lut, overhead_ms in cut_points:
+                segment.add_cut_point(op_id, perf_lut, overhead_ms)
         else:
             raise ValueError(f"Segment {segment_id} not found")
     
@@ -154,6 +154,32 @@ class NNTask:
     def add_dependencies(self, task_ids: List[str]):
         """批量添加依赖"""
         self.dependencies.update(task_ids)
+    
+    def apply_model(self, model_data):
+        """应用模型定义（segments和可选的cut points）
+        
+        Args:
+            model_data: 可以是:
+                - List[ResourceSegment]: 简单模型，只有segments
+                - Tuple[List[ResourceSegment], Dict[str, List[CutPoint]]]: 带切分点的模型
+        """
+        from typing import Tuple
+        from core.models import CutPoint
+        
+        if isinstance(model_data, tuple):
+            # 带切分点的模型
+            segments, cut_points = model_data
+            self.segments = segments
+            
+            # 如果是FORCED_SEGMENTATION策略，自动应用切分点
+            if self.segmentation_strategy == SegmentationStrategy.FORCED_SEGMENTATION:
+                for segment_id, cuts in cut_points.items():
+                    segment = self.get_segment_by_id(segment_id)
+                    if segment:
+                        segment.cut_points = cuts
+        else:
+            # 简单模型，只有segments
+            self.segments = model_data
     
     # ========== 信息获取方法 ==========
     

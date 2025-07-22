@@ -5,6 +5,7 @@
 
 from core.enums import ResourceType, TaskPriority, RuntimeType, SegmentationStrategy
 from core.task import NNTask, create_npu_task, create_dsp_task, create_mixed_task
+from scenario.model_repo import get_model
 
 
 def create_real_tasks():
@@ -40,115 +41,94 @@ def create_real_tasks():
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
-    # 添加NPU主段
-    task1.add_segment(ResourceType.NPU, {20: 1.63, 40: 1.156, 80: 0.93, 120: 0.90}, "main")
-    # 添加DSP后处理段
-    task1.add_segment(ResourceType.DSP, {20: 0.48, 40: 0.455, 80: 0.46, 120: 0.45}, "postprocess")
+    # 从model_lib获取模型定义并应用
+    task1.apply_model(get_model("parsing"))
     task1.set_performance_requirements(fps=fps_table[task1.name], latency=1000.0/fps_table[task1.name])
     tasks.append(task1)
     print("  ✓ T1 Parsing: 3A中频NPU+DSP任务")
     
     # 任务2: 重识别（高频任务）
-    task2 = create_npu_task(
+    task2 = NNTask(
         "T2", "ReID",
-        # {20: 1.06, 40: 0.716, 80: 0.59, 120: 0.631},
-        {20: 4.24, 40: 2.864, 80: 2.56, 120: 2.52},
         priority=TaskPriority.LOW,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
+    task2.apply_model(get_model("reid"))
     task2.set_performance_requirements(fps=fps_table[task2.name], latency=50.0)
     tasks.append(task2)
     print("  ✓ T2 ReID: 高频NPU任务")
     
     # 任务3: MOTR - 多目标跟踪（关键任务）
-    task3 = create_mixed_task(
+    task3 = NNTask(
         "T3", "MOTR",
-        segments=[
-            (ResourceType.DSP, {20: 0.316, 40: 0.305, 120: 0.368}, "dsp_s0"),
-            (ResourceType.NPU, {20: 0.430, 40: 0.303, 120: 0.326}, "npu_s1"),
-            (ResourceType.NPU, {20: 12.868, 40: 7.506, 120: 4.312}, "npu_s2"),
-            (ResourceType.DSP, {20: 1.734, 40: 1.226, 120: 0.994}, "dsp_s1"),
-            (ResourceType.NPU, {20: 0.997, 40: 0.374, 120: 0.211}, "npu_s3"),
-            (ResourceType.DSP, {20: 1.734, 40: 1.201, 120: 0.943}, "dsp_s2"),
-            (ResourceType.NPU, {20: 0.602, 40: 0.373, 120: 0.209}, "npu_s4"),
-            (ResourceType.DSP, {20: 1.690, 40: 1.208, 120: 0.975}, "dsp_s3"),
-            (ResourceType.NPU, {20: 0.596, 40: 0.321, 120: 0.134}, "npu_s4"),
-        ],
         priority=TaskPriority.HIGH,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.FORCED_SEGMENTATION
     )
-    task3.add_cut_points_to_segment("npu_s2", [
-        ("cut1", {40: 2.5}, 0.0),   # simulated
-        ("cut2", {40: 2.5}, 0.0),  # simulated
-        # 50-100%: 自动计算剩余部分
-    ])
+    task3.apply_model(get_model("motr"))
     task3.set_performance_requirements(fps=fps_table[task3.name], latency=1000.0/fps_table[task3.name])
     tasks.append(task3)
     print("  ✓ T3 MOTR: 9段混合任务 (4 DSP + 5 NPU)")
     
     # 任务4: motr post处理 - qim
-    task4 = create_mixed_task(  
+    task4 = NNTask(
         "T4", "qim",
-        segments=[
-            (ResourceType.NPU, {10: 1.339, 20: 0.758, 40: 0.474, 80: 0.32, 120: 0.292}, "npu_sub"),
-            (ResourceType.DSP, {10: 1.238, 20: 1.122, 40: 1.04, 80: 1, 120: 1.014}, "dsp_sub"),
-        ],
         priority=TaskPriority.HIGH,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
+    task4.apply_model(get_model("qim"))
     task4.set_performance_requirements(fps=fps_table[task4.name], latency=1000.0/fps_table[task4.name])
     task4.add_dependency("T3")  # 依赖MOTR
     tasks.append(task4)
     print("  ✓ T4 qim: DSP+NPU混合任务 (依赖T3)")
     
     # 任务5: 2D姿态估计
-    task5 = create_npu_task(
+    task5 = NNTask(
         "T5", "pose2d",
-        {20: 4.324, 40: 3.096, 80: 2.28, 120: 2.04},
         priority=TaskPriority.NORMAL,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
+    task5.apply_model(get_model("pose2d"))
     task5.set_performance_requirements(fps=fps_table[task5.name], latency=1000.0/fps_table[task5.name])
     task5.add_dependency("T3")  # 依赖MOTR的检测结果
     tasks.append(task5)
     print("  ✓ T5 pose2d: NPU任务 (依赖T3)")
     
     # 任务6: 模板匹配
-    task6 = create_npu_task(
+    task6 = NNTask(
         "T6", "tk_template",
-        {20: 0.48, 40: 0.33, 80: 0.27, 120: 0.25},
         priority=TaskPriority.NORMAL,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
+    task6.apply_model(get_model("tk_template"))
     task6.set_performance_requirements(fps=fps_table[task6.name], latency=1000.0/fps_table[task6.name])
     tasks.append(task6)
     print("  ✓ T6 tk_temp: 纯NPU任务")
     
     # 任务7: 搜索任务
-    task7 = create_npu_task(
+    task7 = NNTask(
         "T7", "tk_search",
-        {20: 1.16, 40: 0.72, 80: 0.54, 120: 0.50},
         priority=TaskPriority.NORMAL,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
+    task7.apply_model(get_model("tk_search"))
     task7.set_performance_requirements(fps=fps_table[task7.name], latency=1000.0/fps_table[task7.name])
     tasks.append(task7)
     print("  ✓ T7 tk_search: 纯NPU任务")
     
     # 任务8：灰度Mask
-    task8 = create_npu_task(
+    task8 = NNTask(
         "T8", "GrayMask",
-        {20: 2.42, 40: 2.00, 80: 1.82, 120: 1.80},
         priority=TaskPriority.NORMAL,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
+    task8.apply_model(get_model("graymask"))
     task8.set_performance_requirements(fps=fps_table[task8.name], latency=1000.0/fps_table[task8.name])
     tasks.append(task8)
     print("  ✓ T8 GrayMask: 纯NPU任务")
@@ -160,19 +140,7 @@ def create_real_tasks():
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.FORCED_SEGMENTATION
     )
-    # 添加NPU主段
-    task9.add_segment(ResourceType.NPU, {20: 20.28, 40: 12.31, 120: 7.50}, "main")
-    # 添加DSP后处理段
-    # task9.add_segment(ResourceType.DSP, {40: 3.423}, "postprocess")
-    
-    # 为主段添加切分点
-    task9.add_cut_points_to_segment("main", [
-        ("op6", {20: 4.699, 40: 2.737, 120: 1.482}, 0.0),      # 0-20%: 4.699
-        ("op13", {20: 4.699, 40: 2.737, 120: 1.482}, 0.0),     # 20-40%: 9.398-4.699=4.699
-        ("op14", {20: 4.698, 40: 2.736, 120: 1.483}, 0.0),     # 40-60%: 14.096-9.398=4.698
-        ("op19", {20: 4.699, 40: 2.737, 120: 1.482}, 0.0)      # 60-80%: 18.795-14.096=4.699
-        # 80-100%: 20.28-18.795=1.485 (自动计算)
-    ])
+    task9.apply_model(get_model("yolov8n_big"))
     task9.set_performance_requirements(fps=fps_table[task9.name], latency=1000.0/fps_table[task9.name])
     tasks.append(task9)
     print("  ✓ T9 YoloV8nBig: 可分段NPU任务")
@@ -184,42 +152,19 @@ def create_real_tasks():
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.FORCED_SEGMENTATION
     )
-    task10.add_segment(ResourceType.NPU, {20: 5.02, 40: 3.16, 120: 2.03}, "main")
-    # task10.add_segment(ResourceType.DSP, {40: 1.957}, "postprocess")
-    
-    # 添加切分点
-    task10.add_cut_points_to_segment("main", [
-        ("op5", {20: 1.138, 40: 0.691, 120: 0.418}, 0.0),      # 0-20%: 1.138
-        ("op15", {20: 1.138, 40: 0.691, 120: 0.417}, 0.0),     # 20-40%: 2.276-1.138=1.138
-        ("op19", {20: 2.275, 40: 1.381, 120: 0.835}, 0.0)      # 40-80%: 4.551-2.276=2.275
-        # 80-100%: 5.02-4.551=0.469 (自动计算)
-    ])
+    task10.apply_model(get_model("yolov8n_small"))
     task10.set_performance_requirements(fps=fps_table[task10.name], latency=1000.0/fps_table[task10.name])
     tasks.append(task10)
     print("  ✓ T10 YoloV8nSmall: 可分段NPU任务")
     
     # 任务11: Stereo4x - 双目深度（关键任务）
-    task11 = create_mixed_task(
+    task11 = NNTask(
         "T11", "Stereo4x",
-        segments=[
-            (ResourceType.NPU, {20: 4.347, 40: 2.730, 80: 2.002, 120: 1.867}, "npu_s0"), #scale
-            (ResourceType.DSP, {20: 1.16, 40: 0.655, 80: 0.441, 120: 0.404}, "dsp_s0"), #guess
-            (ResourceType.NPU, {20: 2.900, 40: 2.016, 80: 1.642, 120: 1.608}, "npu_s1"), #scale
-            (ResourceType.DSP, {20: 1.16, 40: 0.655, 80: 0.441, 120: 0.404}, "dsp_s1"), #guess
-            (ResourceType.DSP, {20: 1.16, 40: 0.655, 80: 0.441, 120: 0.404}, "dsp_s2"), #guess
-            (ResourceType.NPU, {20: 1.456, 40: 1.046, 80: 0.791, 120: 0.832}, "npu_s2"), #scale
-            (ResourceType.NPU, {20: 1.456, 40: 1.115, 80: 0.932, 120: 0.924}, "npu_s3"), #scale
-            (ResourceType.NPU, {20: 8.780, 40: 6.761, 80: 5.712, 120: 5.699}, "npu_s4"), #scale
-        ],
         priority=TaskPriority.HIGH,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.FORCED_SEGMENTATION
     )
-    task11.add_cut_points_to_segment("npu_s4", [
-        ("cut1", {40: 2.111}, 0.0),   # simulated
-        ("cut1", {40: 2.222}, 0.0),  # simulated
-        # 50-100%: 自动计算剩余部分
-    ])
+    task11.apply_model(get_model("stereo4x"))
     task11.set_performance_requirements(fps=fps_table[task11.name], latency=65.0)
     tasks.append(task11)
     print("  ✓ T11 Stereo4x: 8段混合任务 (3 DSP + 5 NPU)")
@@ -231,27 +176,19 @@ def create_real_tasks():
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.FORCED_SEGMENTATION
     )
-    task12.add_segment(ResourceType.NPU, {20: 2.31, 40: 1.49, 80: 1.14, 120: 1.02}, "main")
-    task12.add_segment(ResourceType.DSP, {20: 1.23, 40: 0.71, 80: 0.45, 120: 0.41}, "postprocess")
-    
-    # 添加切分点
-    task12.add_cut_points_to_segment("main", [
-        ("op4", {20: 0.924, 40: 0.596, 80: 0.456, 120: 0.408}, 0.0),   # 0-40%
-        ("op14", {20: 0.277, 40: 0.179, 80: 0.137, 120: 0.122}, 0.0),  # 40-50%: 差值计算
-        # 50-100%: 自动计算剩余部分
-    ])
+    task12.apply_model(get_model("skywater"))
     task12.set_performance_requirements(fps=fps_table[task12.name], latency=100.0)
     tasks.append(task12)
     print("  ✓ T12 Skywater: 可分段NPU+DSP任务")
     
-    # 任务8：灰度Mask
-    task13 = create_npu_task(
+    # 任务13: PeakDetector
+    task13 = NNTask(
         "T13", "PeakDetector",
-        {20: 1.51, 40: 0.97, 80: 0.70, 120: 0.62},
         priority=TaskPriority.NORMAL,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
+    task13.apply_model(get_model("peak_detector"))
     task13.set_performance_requirements(fps=fps_table[task13.name], latency=1000.0/fps_table[task13.name])
     tasks.append(task13)
     print("  ✓ T13 PeakDetector: 纯NPU任务")
@@ -263,16 +200,7 @@ def create_real_tasks():
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.FORCED_SEGMENTATION
     )
-    task14.add_segment(ResourceType.NPU, {20: 4.19, 40: 2.49, 80: 1.70, 120: 1.67}, "main")
-    task14.add_segment(ResourceType.DSP, {20: 1.52, 40: 0.90, 80: 0.58, 120: 0.58}, "postprocess")
-    
-    # 添加切分点
-    task14.add_cut_points_to_segment("main", [
-        ("op4", {20: 1.676, 40: 0.996, 80: 0.680, 120: 0.668}, 0.0),   # 0-40%
-        ("op14", {20: 0.503, 40: 0.299, 80: 0.204, 120: 0.200}, 0.0),  # 40-50%: 差值计算
-        # 50-100%: 自动计算剩余部分
-    ])
-    # task14.set_performance_requirements(fps=fps_table[task14.name], latency=1000.0/fps_table[task14.name])
+    task14.apply_model(get_model("skywater_big"))
     task14.set_performance_requirements(fps=fps_table[task14.name], latency=34.0)
     tasks.append(task14)
     print("  ✓ T14 Skywater Mono: 可分段NPU+DSP任务")
@@ -284,19 +212,10 @@ def create_real_tasks():
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.FORCED_SEGMENTATION
     )
-    task15.add_segment(ResourceType.NPU, {20: 4.19, 40: 2.49, 80: 1.70, 120: 1.67}, "main")
-    task15.add_segment(ResourceType.DSP, {20: 1.52, 40: 0.90, 80: 0.58, 120: 0.58}, "postprocess")
-    
-    # 添加切分点
-    task15.add_cut_points_to_segment("main", [
-        ("op4", {20: 1.676, 40: 0.996, 80: 0.680, 120: 0.668}, 0.0),   # 0-40%
-        ("op14", {20: 0.503, 40: 0.299, 80: 0.204, 120: 0.200}, 0.0),  # 40-50%: 差值计算
-        # 50-100%: 自动计算剩余部分
-    ])
-    # task14.set_performance_requirements(fps=fps_table[task14.name], latency=1000.0/fps_table[task14.name])
+    task15.apply_model(get_model("skywater_big"))
     task15.set_performance_requirements(fps=fps_table[task15.name], latency=34.0)
     tasks.append(task15)
-    print("  ✓ T14 Skywater Mono: 可分段NPU+DSP任务")
+    print("  ✓ T15 Skywater Mono: 可分段NPU+DSP任务")
     
     # 任务16: Skywater 大模型
     task16 = NNTask(
@@ -305,27 +224,19 @@ def create_real_tasks():
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.FORCED_SEGMENTATION
     )
-    task16.add_segment(ResourceType.NPU, {20: 4.19, 40: 2.49, 80: 1.70, 120: 1.67}, "main")
-    task16.add_segment(ResourceType.DSP, {20: 1.52, 40: 0.90, 80: 0.58, 120: 0.58}, "postprocess")
-    
-    # 添加切分点
-    task16.add_cut_points_to_segment("main", [
-        ("op4", {20: 1.676, 40: 0.996, 80: 0.680, 120: 0.668}, 0.0),   # 0-40%
-        ("op14", {20: 0.503, 40: 0.299, 80: 0.204, 120: 0.200}, 0.0),  # 40-50%: 差值计算
-        # 50-100%: 自动计算剩余部分
-    ])
+    task16.apply_model(get_model("skywater_big"))
     task16.set_performance_requirements(fps=fps_table[task16.name], latency=34.0)
     tasks.append(task16)
     print("  ✓ T16 Skywater Mono3: 可分段NPU+DSP任务")
 
     # 任务17: 模板匹配
-    task17 = create_npu_task(
+    task17 = NNTask(
         "T17", "BonusTask",
-        {40: 7.5},
         priority=TaskPriority.LOW,
         runtime_type=RuntimeType.ACPU_RUNTIME,
         segmentation_strategy=SegmentationStrategy.NO_SEGMENTATION
     )
+    task17.apply_model(get_model("bonus_task"))
     task17.set_performance_requirements(fps=fps_table[task17.name], latency=1000.0/fps_table[task17.name])
     tasks.append(task17)
     print("  ✓ T17 BonusTask: 奖励任务")
