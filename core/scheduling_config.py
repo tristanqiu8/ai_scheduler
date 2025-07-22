@@ -131,7 +131,7 @@ class SchedulingConfig:
     
     def print_config(self):
         """打印配置详情"""
-        print(f"\n📋 {self.scenario_name}")
+        print(f"\n[INFO] {self.scenario_name}")
         print("="*60)
         print("资源配置:")
         for resource in self.resources:

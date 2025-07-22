@@ -371,11 +371,11 @@ class PerformanceEvaluator:
             return
         
         print("\n" + "="*80)
-        print("📊 性能评估报告")
+        print("[ANALYSIS] 性能评估报告")
         print("="*80)
         
         # 1. 任务执行详情
-        print("\n1️⃣ 任务执行详情:")
+        print("\n[STEP 1] 任务执行详情:")
         print("-"*80)
         print(f"{'任务ID':<15} {'优先级':<8} {'FPS要求':<8} {'实际FPS':<8} {'达标':<6} "
               f"{'运行次数':<8} {'平均等待':<10} {'平均延迟':<10} {'延迟达标率':<10}")
@@ -386,14 +386,14 @@ class PerformanceEvaluator:
                             key=lambda m: (m.priority.value, m.task_id))
         
         for m in sorted_tasks:
-            fps_ok = "✅" if m.fps_satisfaction else "❌"
+            fps_ok = "✅" if m.fps_satisfaction else "[ERROR]"
             print(f"{m.task_id:<15} {m.priority.name:<8} {m.fps_requirement:<8.1f} "
                   f"{m.achieved_fps:<8.1f} {fps_ok:<6} {m.instance_count:<8} "
                   f"{m.avg_wait_time:<10.2f} {m.avg_latency:<10.2f} "
                   f"{m.latency_satisfaction_rate:<10.1%}")
         
         # 2. 资源利用率
-        print("\n2️⃣ 资源利用率:")
+        print("\n[STEP 2] 资源利用率:")
         print("-"*80)
         print(f"{'资源ID':<15} {'类型':<8} {'利用率':<10} {'忙碌时间':<12} {'空闲时间':<12} {'执行段数':<10}")
         print("-"*80)
@@ -408,12 +408,12 @@ class PerformanceEvaluator:
         
         # 3. 整体性能指标
         m = self.overall_metrics
-        print("\n3️⃣ 整体性能指标:")
+        print("\n[STEP 3] 整体性能指标:")
         print("-"*80)
         
         print(f"时间窗口: {m.time_window:.1f}ms")
         print(f"实际执行时间: {m.actual_execution_time:.1f}ms")
-        print(f"🎯 空闲时间: {m.idle_time:.1f}ms ({m.idle_time_ratio:.1f}%)")
+        print(f"[SUCCESS] 空闲时间: {m.idle_time:.1f}ms ({m.idle_time_ratio:.1f}%)")
         
         print(f"\nFPS性能:")
         print(f"  - 总FPS要求: {m.total_fps_requirement:.1f}")

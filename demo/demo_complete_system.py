@@ -22,11 +22,11 @@ import matplotlib.pyplot as plt
 def demo_complete_system():
     """演示完整的调度系统工作流程"""
     print("="*80)
-    print("🚀 AI调度系统完整演示")
+    print("[DEMO] AI调度系统完整演示")
     print("="*80)
     
     # 1. 系统初始化
-    print("\n1️⃣ 系统初始化")
+    print("\n[STEP 1] 系统初始化")
     print("-"*40)
     
     # 创建资源
@@ -36,12 +36,12 @@ def demo_complete_system():
     queue_manager.add_resource("DSP_0", ResourceType.DSP, 40.0)
     queue_manager.add_resource("DSP_1", ResourceType.DSP, 40.0)
     
-    print("✓ 资源配置:")
+    print("[OK] 资源配置:")
     print("  - NPU x2 (带宽: 60.0)")
     print("  - DSP x2 (带宽: 40.0)")
     
     # 2. 加载任务
-    print("\n2️⃣ 加载任务")
+    print("\n[STEP 2] 加载任务")
     print("-"*40)
     
     tasks = create_real_tasks()
@@ -54,7 +54,7 @@ def demo_complete_system():
         tasks[6],  # T7: crop (LOW)
     ]
     
-    print(f"✓ 加载了 {len(selected_tasks)} 个任务:")
+    print(f"[OK] 加载了 {len(selected_tasks)} 个任务:")
     for task in selected_tasks:
         seg_info = f"{len(task.segments)}段"
         if task.segments:
@@ -67,7 +67,7 @@ def demo_complete_system():
               f"{seg_info}")
     
     # 3. 基线执行（激进策略）
-    print("\n3️⃣ 基线执行 (激进策略)")
+    print("\n[STEP 3] 基线执行 (激进策略)")
     print("-"*40)
     
     # 创建追踪器和发射器
@@ -82,26 +82,26 @@ def demo_complete_system():
     time_window = 200.0
     plan_eager = launcher_baseline.create_launch_plan(time_window, strategy="eager")
     
-    print(f"✓ 激进发射计划: {len(plan_eager.events)} 个发射事件")
+    print(f"[OK] 激进发射计划: {len(plan_eager.events)} 个发射事件")
     
     # 执行基线
     executor_baseline = ScheduleExecutor(queue_manager, tracer_baseline, launcher_baseline.tasks)
     exec_stats_baseline = executor_baseline.execute_plan(plan_eager, time_window)
     
-    print(f"✓ 执行完成: {exec_stats_baseline['total_segments_executed']} 个段")
+    print(f"[OK] 执行完成: {exec_stats_baseline['total_segments_executed']} 个段")
     
     # 评估基线
     evaluator_baseline = PerformanceEvaluator(tracer_baseline, launcher_baseline.tasks, queue_manager)
     metrics_baseline = evaluator_baseline.evaluate(time_window, plan_eager.events)
     
-    print(f"\n📊 基线性能:")
+    print(f"\n[BASELINE] 基线性能:")
     print(f"  空闲时间: {metrics_baseline.idle_time:.1f}ms ({metrics_baseline.idle_time_ratio:.1f}%)")
     print(f"  FPS满足率: {metrics_baseline.fps_satisfaction_rate:.1f}%")
     print(f"  NPU利用率: {metrics_baseline.avg_npu_utilization:.1f}%")
     print(f"  DSP利用率: {metrics_baseline.avg_dsp_utilization:.1f}%")
     
     # 4. 优化发射策略
-    print("\n4️⃣ 优化发射策略")
+    print("\n[STEP 4] 优化发射策略")
     print("-"*40)
     
     # 为优化创建独立的组件，但使用相同的资源配置
@@ -129,7 +129,7 @@ def demo_complete_system():
     
     optimizer = LaunchOptimizer(launcher_opt, queue_manager_opt, opt_config)
     
-    print("✓ 优化器配置:")
+    print("[OK] 优化器配置:")
     print(f"  目标权重: 空闲时间={opt_config.idle_time_weight}, "
           f"FPS={opt_config.fps_satisfaction_weight}, "
           f"均衡={opt_config.resource_balance_weight}")
@@ -139,14 +139,14 @@ def demo_complete_system():
     best_strategy = optimizer.optimize(time_window, base_strategy="eager")
     
     # 5. 执行优化后的策略
-    print("\n5️⃣ 执行优化策略")
+    print("\n[STEP 5] 执行优化策略")
     print("-"*40)
     
     # 应用最优策略
     plan_optimized = optimizer.apply_best_strategy()
     
     if plan_optimized:
-        print(f"✓ 优化发射计划: {len(plan_optimized.events)} 个发射事件")
+        print(f"[OK] 优化发射计划: {len(plan_optimized.events)} 个发射事件")
         
         # 显示优化后的前几个事件
         print("\n优化后的发射事件（前10个）:")
@@ -166,20 +166,20 @@ def demo_complete_system():
         executor_opt = ScheduleExecutor(queue_manager_opt, tracer_opt, launcher_opt.tasks)
         exec_stats_opt = executor_opt.execute_plan(plan_optimized, time_window)
         
-        print(f"✓ 执行完成: {exec_stats_opt['total_segments_executed']} 个段")
+        print(f"[OK] 执行完成: {exec_stats_opt['total_segments_executed']} 个段")
         
         # 评估优化结果
         evaluator_opt = PerformanceEvaluator(tracer_opt, launcher_opt.tasks, queue_manager)
         metrics_opt = evaluator_opt.evaluate(time_window, plan_optimized.events)
         
-        print(f"\n📊 优化后性能:")
+        print(f"\n[OPTIMIZED] 优化后性能:")
         print(f"  空闲时间: {metrics_opt.idle_time:.1f}ms ({metrics_opt.idle_time_ratio:.1f}%)")
         print(f"  FPS满足率: {metrics_opt.fps_satisfaction_rate:.1f}%")
         print(f"  NPU利用率: {metrics_opt.avg_npu_utilization:.1f}%")
         print(f"  DSP利用率: {metrics_opt.avg_dsp_utilization:.1f}%")
     
     # 6. 对比分析
-    print("\n6️⃣ 性能对比")
+    print("\n[STEP 6] 性能对比")
     print("-"*40)
     
     if plan_optimized and metrics_opt:
@@ -192,12 +192,12 @@ def demo_complete_system():
               f"({metrics_baseline.fps_satisfaction_rate:.1f} → {metrics_opt.fps_satisfaction_rate:.1f})")
         
         if idle_improve > 0:
-            print("\n✅ 优化成功！空闲时间增加了 {:.1f}ms".format(idle_improve))
+            print("\n[SUCCESS] 优化成功！空闲时间增加了 {:.1f}ms".format(idle_improve))
         elif fps_change < -5:
-            print("\n⚠️ 警告：FPS满足率下降超过5%")
+            print("\n[WARNING] 警告：FPS满足率下降超过5%")
     
     # 7. 可视化
-    print("\n7️⃣ 生成可视化")
+    print("\n[STEP 7] 生成可视化")
     print("-"*40)
     
     # 基线可视化
@@ -214,7 +214,7 @@ def demo_complete_system():
         # 生成详细报告
         evaluator_opt.export_json_report("demo_performance_report.json")
     
-    print("✓ 生成的文件:")
+    print("[OK] 生成的文件:")
     print("  - demo_baseline_gantt.png (基线甘特图)")
     print("  - demo_baseline_trace.json (基线Chrome追踪)")
     if plan_optimized:
@@ -223,7 +223,7 @@ def demo_complete_system():
         print("  - demo_performance_report.json (性能报告)")
     
     # 8. 任务性能详情
-    print("\n8️⃣ 任务执行详情")
+    print("\n[STEP 8] 任务执行详情")
     print("-"*40)
     
     print(f"\n{'任务ID':<10} {'优先级':<8} {'FPS要求':<8} {'基线FPS':<10} {'优化FPS':<10} {'状态':<6}")
@@ -236,9 +236,9 @@ def demo_complete_system():
         baseline_fps = f"{baseline_m.achieved_fps:.1f}"
         opt_fps = f"{opt_m.achieved_fps:.1f}" if opt_m else "N/A"
         
-        status = "✅" if baseline_m.fps_satisfaction else "❌"
+        status = "[OK]" if baseline_m.fps_satisfaction else "[ERROR]"
         if opt_m and opt_m.fps_satisfaction != baseline_m.fps_satisfaction:
-            status = "✅→❌" if baseline_m.fps_satisfaction else "❌→✅"
+            status = "[OK]->[ERROR]" if baseline_m.fps_satisfaction else "[ERROR]->[OK]"
         
         print(f"{task_id:<10} {baseline_m.priority.name:<8} "
               f"{baseline_m.fps_requirement:<8.1f} {baseline_fps:<10} "
@@ -246,7 +246,7 @@ def demo_complete_system():
     
     # 9. 总结
     print("\n" + "="*80)
-    print("💡 系统演示总结")
+    print("[TIP] 系统演示总结")
     print("="*80)
     
     print("\n关键发现:")
@@ -257,7 +257,7 @@ def demo_complete_system():
     print("5. 可视化支持多种格式（甘特图、Chrome追踪、JSON报告）")
     
     if plan_optimized and idle_improve > 0:
-        print(f"\n🎯 优化成功将空闲时间提升了 {idle_improve:.1f}ms!")
+        print(f"\n[SUCCESS] 优化成功将空闲时间提升了 {idle_improve:.1f}ms!")
         print("   这些额外的空闲时间可用于:")
         print("   - 系统节能")
         print("   - 处理突发任务")
@@ -303,7 +303,7 @@ def demo_segment_visualization():
     viz = ScheduleVisualizer(tracer)
     viz.print_gantt_chart(width=60)
     
-    print("\n✓ 分段标签格式验证:")
+    print("\n[OK] 分段标签格式验证:")
     print("  - '_s1/2/3' 格式: 简短标签")
     print("  - '_seg1/2/3' 格式: 完整标签")
     print("  两种格式都被支持！")
@@ -316,4 +316,4 @@ if __name__ == "__main__":
     # 运行分段标签演示
     demo_segment_visualization()
     
-    print("\n\n✨ 所有演示完成！")
+    print("\n\n[COMPLETE] 所有演示完成！")

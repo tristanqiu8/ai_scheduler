@@ -121,7 +121,7 @@ def demo_schedule_tracer():
     # 详细报告
     visualizer.export_summary_report("demo_report.txt")
     
-    print("\n✅ 可视化文件已生成:")
+    print("\n[OK] 可视化文件已生成:")
     print("  - demo_timeline.png (Matplotlib图表)")
     print("  - demo_trace.json (Chrome Tracing文件)")
     print("  - demo_report.txt (文本报告)")

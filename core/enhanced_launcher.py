@@ -354,5 +354,5 @@ if __name__ == "__main__":
         task = next(t for t in tasks if t.task_id == task_id)
         expected = int(200.0 / (1000.0 / task.fps_requirement))
         actual = task_counts[task_id]
-        status = "✓" if actual >= expected else "✗"
+        status = "[OK]" if actual >= expected else "[FAIL]"
         print(f"{task_id}: {actual}/{expected} (FPS={task.fps_requirement}) {status}")

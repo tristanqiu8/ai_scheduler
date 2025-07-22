@@ -217,7 +217,7 @@ def main():
             
             if improvement > 0:
                 improved_count += 1
-                status = "✓"
+                status = "[OK]"
             else:
                 status = ""
             
@@ -240,10 +240,10 @@ def main():
     
     png_filename = "priority_optimized_scheduling.png"
     visualizer.plot_resource_timeline(png_filename)
-    print(f"✓ 生成甘特图: {png_filename}")
+    print(f"[OK] 生成甘特图: {png_filename}")
     
     print("\n" + "=" * 100)
-    print("💡 结论:")
+    print("[TIP] 结论:")
     print("=" * 100)
     print("1. 通过分析基准性能，识别延迟紧张的任务")
     print("2. 根据延迟余量和满足率，智能调整任务优先级")

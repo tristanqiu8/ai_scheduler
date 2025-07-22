@@ -100,7 +100,7 @@ class LaunchOptimizer:
         Returns:
             优化后的发射策略
         """
-        print(f"\n🔧 开始优化发射策略 (目标: 最大化空闲时间)")
+        print(f"\n[OPTIMIZE] 开始优化发射策略 (目标: 最大化空闲时间)")
         print(f"  时间窗口: {time_window}ms")
         print(f"  基础策略: {base_strategy}")
         
@@ -110,7 +110,7 @@ class LaunchOptimizer:
             time_window
         )
         
-        print(f"\n📊 基线性能:")
+        print(f"\n[ANALYSIS] 基线性能:")
         print(f"  空闲时间: {baseline_metrics.idle_time:.1f}ms ({baseline_metrics.idle_time_ratio:.1f}%)")
         print(f"  FPS满足率: {baseline_metrics.fps_satisfaction_rate:.1f}%")
         
@@ -126,7 +126,7 @@ class LaunchOptimizer:
         
         # 评估最优策略
         if self.best_metrics:
-            print(f"\n✨ 优化结果:")
+            print(f"\n[COMPLETE] 优化结果:")
             print(f"  空闲时间: {self.best_metrics.idle_time:.1f}ms "
                   f"({self.best_metrics.idle_time_ratio:.1f}%)")
             print(f"  FPS满足率: {self.best_metrics.fps_satisfaction_rate:.1f}%")
@@ -185,7 +185,7 @@ class LaunchOptimizer:
     def _genetic_optimize(self, time_window: float, 
                          baseline_metrics: OverallPerformanceMetrics) -> LaunchStrategy:
         """使用遗传算法优化"""
-        print("\n🧬 使用遗传算法优化...")
+        print("\n[GENETIC] 使用遗传算法优化...")
         
         # 初始化种群
         population = self._initialize_population()

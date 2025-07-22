@@ -164,7 +164,7 @@ def test_bandwidth_sweep():
     
     plt.tight_layout()
     plt.savefig('bandwidth_sweep_results.png')
-    print("\n✓ 带宽扫描结果已保存到: bandwidth_sweep_results.png")
+    print("\n[OK] 带宽扫描结果已保存到: bandwidth_sweep_results.png")
 
 
 def main():

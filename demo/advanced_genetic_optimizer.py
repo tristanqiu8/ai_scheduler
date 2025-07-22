@@ -109,7 +109,7 @@ class AdvancedGeneticOptimizer:
             if task.priority != TaskPriority.CRITICAL:
                 self.priority_adjustable[task_id] = True
         
-        print(f"\n📊 任务分析:")
+        print(f"\n[ANALYSIS] 任务分析:")
         print(f"  可分段任务: {list(self.segmentable_tasks.keys())}")
         print(f"  可调整优先级任务: {list(self.priority_adjustable.keys())}")
     
@@ -447,7 +447,7 @@ class AdvancedGeneticOptimizer:
         
         elapsed_time = time.time() - start_time
         
-        print(f"\n✨ 优化完成!")
+        print(f"\n[COMPLETE] 优化完成!")
         print(f"  用时: {elapsed_time:.2f}秒")
         print(f"  最佳个体（基于空闲时间）:")
         print(f"    NPU空闲: {self.best_individual.npu_idle_time:.1f}ms ({self.best_individual.npu_idle_time/200*100:.1f}%)")
@@ -578,7 +578,7 @@ class AdvancedGeneticOptimizer:
 
 def test_advanced_optimizer():
     """测试高级遗传算法优化器"""
-    print("🚀 测试高级遗传算法优化器")
+    print("[DEMO] 测试高级遗传算法优化器")
     print("="*80)
     
     # 创建资源
@@ -641,7 +641,7 @@ def test_advanced_optimizer():
     
     # 打印优化细节
     print("\n" + "="*80)
-    print("📊 优化细节")
+    print("[ANALYSIS] 优化细节")
     print("="*80)
     
     print("\n任务优化情况:")

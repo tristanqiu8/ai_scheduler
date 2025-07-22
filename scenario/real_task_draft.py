@@ -12,7 +12,7 @@ def create_real_tasks():
     
     tasks = []
     
-    print("\n📋 创建测试任务:")
+    print("\n[INFO] 创建测试任务:")
     
     # 任务1: MOTR - 多目标跟踪（关键任务）
     task1 = create_mixed_task(
@@ -34,7 +34,7 @@ def create_real_tasks():
     )
     task1.set_performance_requirements(fps=25, latency=40)
     tasks.append(task1)
-    print("  ✓ T1 MOTR: 9段混合任务 (4 DSP + 5 NPU)")
+    print("  [OK] T1 MOTR: 9段混合任务 (4 DSP + 5 NPU)")
     
     # 任务2: YOLOv8n 大模型
     task2 = NNTask(
@@ -57,7 +57,7 @@ def create_real_tasks():
     ])
     task2.set_performance_requirements(fps=10, latency=100)
     tasks.append(task2)
-    print("  ✓ T2 YoloV8nBig: 可分段NPU+DSP任务")
+    print("  [OK] T2 YoloV8nBig: 可分段NPU+DSP任务")
     
     # 任务3: YOLOv8n 小模型
     task3 = NNTask(
@@ -77,7 +77,7 @@ def create_real_tasks():
     ])
     task3.set_performance_requirements(fps=10, latency=100)
     tasks.append(task3)
-    print("  ✓ T3 YoloV8nSmall: 可分段NPU+DSP任务")
+    print("  [OK] T3 YoloV8nSmall: 可分段NPU+DSP任务")
     
     # 任务4: 模板匹配
     task4 = create_npu_task(
@@ -89,7 +89,7 @@ def create_real_tasks():
     )
     task4.set_performance_requirements(fps=5, latency=200)
     tasks.append(task4)
-    print("  ✓ T4 tk_temp: 纯NPU任务")
+    print("  [OK] T4 tk_temp: 纯NPU任务")
     
     # 任务5: 搜索任务
     task5 = create_npu_task(
@@ -101,7 +101,7 @@ def create_real_tasks():
     )
     task5.set_performance_requirements(fps=25, latency=40)
     tasks.append(task5)
-    print("  ✓ T5 tk_search: 纯NPU任务")
+    print("  [OK] T5 tk_search: 纯NPU任务")
     
     # 任务6: 重识别（高频任务）
     task6 = create_npu_task(
@@ -113,7 +113,7 @@ def create_real_tasks():
     )
     task6.set_performance_requirements(fps=60, latency=16.6)
     tasks.append(task6)
-    print("  ✓ T6 reid: 高频NPU任务")
+    print("  [OK] T6 reid: 高频NPU任务")
     
     # 任务7: 2D姿态估计
     task7 = create_npu_task(
@@ -126,7 +126,7 @@ def create_real_tasks():
     task7.set_performance_requirements(fps=25, latency=40)
     task7.add_dependency("T1")  # 依赖MOTR的检测结果
     tasks.append(task7)
-    print("  ✓ T7 pose2d: NPU任务 (依赖T1)")
+    print("  [OK] T7 pose2d: NPU任务 (依赖T1)")
     
     # 任务8: motr post处理 - qim
     task8 = create_mixed_task(  
@@ -142,7 +142,7 @@ def create_real_tasks():
     task8.set_performance_requirements(fps=25, latency=40)
     task8.add_dependency("T1")  # 依赖MOTR
     tasks.append(task8)
-    print("  ✓ T8 qim: DSP+NPU混合任务 (依赖T1)")
+    print("  [OK] T8 qim: DSP+NPU混合任务 (依赖T1)")
     
     # 任务9： pose2d to 3d
     task9 = create_dsp_task(
@@ -155,14 +155,14 @@ def create_real_tasks():
     task9.set_performance_requirements(fps=25, latency=40)
     task9.add_dependency("T7")  # 依赖pose2d任务
     tasks.append(task9)
-    print("  ✓ T9 pose2d-to-3d: Pure DSP task (依赖T7)")
+    print("  [OK] T9 pose2d-to-3d: Pure DSP task (依赖T7)")
     
     return tasks
 
 
 def print_task_summary(tasks):
     """打印任务摘要"""
-    print("\n📊 任务摘要:")
+    print("\n[ANALYSIS] 任务摘要:")
     print("-" * 80)
     print(f"{'ID':<4} {'名称':<12} {'优先级':<10} {'运行时':<12} {'FPS':<6} {'延迟':<8} {'资源':<15} {'依赖':<10}")
     print("-" * 80)

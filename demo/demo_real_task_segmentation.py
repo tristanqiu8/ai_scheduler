@@ -148,7 +148,7 @@ def print_resource_demand_analysis(tasks, bandwidth_npu=40.0, bandwidth_dsp=40.0
         bandwidth_dsp: DSP带宽
     """
     print("\n" + "="*80)
-    print("📊 资源需求分析（1秒内）")
+    print("[ANALYSIS] 资源需求分析（1秒内）")
     print("="*80)
     
     analysis = compute_resource_demand(tasks, bandwidth_npu, bandwidth_dsp, time_window_ms)
@@ -165,13 +165,13 @@ def print_resource_demand_analysis(tasks, bandwidth_npu=40.0, bandwidth_dsp=40.0
     print(f"\n理论资源利用率:")
     npu_util = analysis['utilization']['npu_percent']
     dsp_util = analysis['utilization']['dsp_percent']
-    print(f"  NPU: {npu_util:.1f}% {'⚠️ 过载!' if npu_util > 100 else '✓'}")
-    print(f"  DSP: {dsp_util:.1f}% {'⚠️ 过载!' if dsp_util > 100 else '✓'}")
+    print(f"  NPU: {npu_util:.1f}% {'[WARNING] 过载!' if npu_util > 100 else '[OK]'}")
+    print(f"  DSP: {dsp_util:.1f}% {'[WARNING] 过载!' if dsp_util > 100 else '[OK]'}")
     
     if analysis['feasible']:
         print(f"\n✅ 系统可行：所有任务的FPS要求理论上可以满足")
     else:
-        print(f"\n❌ 系统不可行：资源不足以满足所有任务的FPS要求")
+        print(f"\n[ERROR] 系统不可行：资源不足以满足所有任务的FPS要求")
     
     # 打印任务详情
     print(f"\n任务详细需求:")
@@ -210,7 +210,7 @@ def analyze_bandwidth_scenarios(tasks):
         tasks: 任务列表
     """
     print("\n" + "="*80)
-    print("📊 不同带宽场景分析")
+    print("[ANALYSIS] 不同带宽场景分析")
     print("="*80)
     
     scenarios = [
@@ -225,7 +225,7 @@ def analyze_bandwidth_scenarios(tasks):
         print(f"\n{name} (NPU={npu_bw}, DSP={dsp_bw}):")
         print(f"  NPU需求: {analysis['total_demand']['npu_ms']:.1f}ms ({analysis['utilization']['npu_percent']:.1f}%)")
         print(f"  DSP需求: {analysis['total_demand']['dsp_ms']:.1f}ms ({analysis['utilization']['dsp_percent']:.1f}%)")
-        print(f"  状态: {'✅ 可行' if analysis['feasible'] else '❌ 不可行'}")
+        print(f"  状态: {'✅ 可行' if analysis['feasible'] else '[ERROR] 不可行'}")
 
 
 def analyze_execution_gaps(tracer, window_ms=200.0):
@@ -337,7 +337,7 @@ def print_execution_gap_analysis(tracer, window_ms=200.0):
         window_ms: 分析窗口（毫秒）
     """
     print("\n" + "="*80)
-    print("📊 执行空隙分析")
+    print("[ANALYSIS] 执行空隙分析")
     print("="*80)
     
     analysis = analyze_execution_gaps(tracer, window_ms)
@@ -415,7 +415,7 @@ def compare_theory_vs_actual(tasks, tracer, bandwidth_npu=40.0, bandwidth_dsp=40
         window_ms: 时间窗口
     """
     print("\n" + "="*80)
-    print("📊 理论 vs 实际执行对比")
+    print("[ANALYSIS] 理论 vs 实际执行对比")
     print("="*80)
     
     # 计算理论需求（按比例缩放到实际窗口）
@@ -670,13 +670,13 @@ def generate_visualization(time_window=200.0):
     launcher = EnhancedTaskLauncher(queue_manager, tracer)
     
     # 打印任务注册信息
-    print("📋 创建测试任务:")
+    print("[INFO] 创建测试任务:")
     for task in tasks:
         launcher.register_task(task)  # ← 关键！必须注册任务
         if len(task.segments) > 1:
-            print(f"  ✓ {task.task_id} {task.name}: {len(task.segments)}段混合任务")
+            print(f"  [OK] {task.task_id} {task.name}: {len(task.segments)}段混合任务")
         else:
-            print(f"  ✓ {task.task_id} {task.name}: 纯{task.segments[0].resource_type.value}任务")
+            print(f"  [OK] {task.task_id} {task.name}: 纯{task.segments[0].resource_type.value}任务")
     
     # 执行
     duration = time_window
@@ -724,9 +724,9 @@ def generate_visualization(time_window=200.0):
     print(f"  最高单资源利用率: {max_resource_util:.1f}%")
     print(f"  System利用率: {system_util:.1f}%")
     if system_util >= max_resource_util - 0.1:  # 允许0.1%的误差
-        print(f"  ✓ 逻辑一致性检查通过")
+        print(f"  [OK] 逻辑一致性检查通过")
     else:
-        print(f"  ✗ 警告：System利用率低于最高资源利用率！")
+        print(f"  [FAIL] 警告：System利用率低于最高资源利用率！")
     
     # 检查任务执行情况
     evaluator = PerformanceEvaluator(tracer, launcher.tasks, queue_manager)
@@ -748,7 +748,7 @@ def generate_visualization(time_window=200.0):
         expected = task.fps_requirement * (duration / 1000.0)
         fps_rate = (actual_fps / task.fps_requirement * 100) if task.fps_requirement > 0 else 0
         
-        status = "✓" if fps_rate >= 100 else "✗"
+        status = "[OK]" if fps_rate >= 100 else "[FAIL]"
         print(f"  {task_id}: {completed}/{expected:.1f} "
               f"(FPS要求: {task.fps_requirement}) {status}")
     
@@ -767,7 +767,7 @@ def main():
     fps_requirements = [task.fps_requirement for task in tasks]
     optimal_window = calculate_optimal_window(fps_requirements, max_window_ms=1000.0)
     
-    print(f"\n📊 时间窗口分析:")
+    print(f"\n[ANALYSIS] 时间窗口分析:")
     print(f"  FPS要求: {fps_requirements}")
     print(f"  最大公约数: {gcd_multiple(fps_requirements)}")
     print(f"  选择的窗口: {optimal_window:.1f}ms")
@@ -797,7 +797,7 @@ def main():
     
     # 总结
     print("\n\n" + "=" * 115)
-    print("📊 优化效果总结")
+    print("[ANALYSIS] 优化效果总结")
     print("=" * 115)
     
     print("\n关键发现：")

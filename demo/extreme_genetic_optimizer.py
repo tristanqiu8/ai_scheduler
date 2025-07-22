@@ -443,7 +443,7 @@ class ExtremeGeneticOptimizer:
         
         elapsed_time = time.time() - start_time
         
-        print(f"\n✨ 优化完成!")
+        print(f"\n[COMPLETE] 优化完成!")
         print(f"  用时: {elapsed_time:.2f}秒")
         print(f"  最佳个体:")
         print(f"    末尾空闲时间: {self.best_individual.tail_idle_time:.1f}ms")
@@ -495,7 +495,7 @@ class ExtremeGeneticOptimizer:
 
 def test_extreme_optimizer():
     """测试极致遗传算法优化器"""
-    print("🚀 测试极致遗传算法优化器")
+    print("[DEMO] 测试极致遗传算法优化器")
     print("="*80)
     
     # 创建资源
@@ -671,9 +671,9 @@ def test_extreme_optimizer():
         print("   - extreme_optimization_result.png (优化结果)")
         
     except ImportError:
-        print("\n⚠️ matplotlib未安装，跳过图表生成")
+        print("\n[WARNING] matplotlib未安装，跳过图表生成")
     except Exception as e:
-        print(f"\n⚠️ 图表生成失败: {e}")
+        print(f"\n[WARNING] 图表生成失败: {e}")
         import traceback
         traceback.print_exc()
     
@@ -700,7 +700,7 @@ def test_extreme_optimizer():
         baseline_completion = max(baseline_completion, execution.end_time)
     baseline_idle = 200.0 - baseline_completion
     
-    print(f"\n📊 优化效果对比:")
+    print(f"\n[ANALYSIS] 优化效果对比:")
     print(f"{'指标':<20} {'基线':<15} {'优化后':<15} {'改进':<15}")
     print("-" * 65)
     print(f"{'末尾空闲时间':<20} {baseline_idle:.1f}ms{'':<10} "

@@ -13,7 +13,7 @@ def create_real_tasks():
     
     tasks = []
     
-    print("\n📋 创建测试任务:")
+    print("\n[INFO] 创建测试任务:")
     
     fps_table = {"Parsing": 60,
                  "ReID": 25,
@@ -45,7 +45,7 @@ def create_real_tasks():
     task1.apply_model(get_model("parsing"))
     task1.set_performance_requirements(fps=fps_table[task1.name], latency=1000.0/fps_table[task1.name])
     tasks.append(task1)
-    print("  ✓ T1 Parsing: 3A中频NPU+DSP任务")
+    print("  [OK] T1 Parsing: 3A中频NPU+DSP任务")
     
     # 任务2: 重识别（高频任务）
     task2 = NNTask(
@@ -57,7 +57,7 @@ def create_real_tasks():
     task2.apply_model(get_model("reid"))
     task2.set_performance_requirements(fps=fps_table[task2.name], latency=50.0)
     tasks.append(task2)
-    print("  ✓ T2 ReID: 高频NPU任务")
+    print("  [OK] T2 ReID: 高频NPU任务")
     
     # 任务3: MOTR - 多目标跟踪（关键任务）
     task3 = NNTask(
@@ -69,7 +69,7 @@ def create_real_tasks():
     task3.apply_model(get_model("motr"))
     task3.set_performance_requirements(fps=fps_table[task3.name], latency=1000.0/fps_table[task3.name])
     tasks.append(task3)
-    print("  ✓ T3 MOTR: 9段混合任务 (4 DSP + 5 NPU)")
+    print("  [OK] T3 MOTR: 9段混合任务 (4 DSP + 5 NPU)")
     
     # 任务4: motr post处理 - qim
     task4 = NNTask(
@@ -82,7 +82,7 @@ def create_real_tasks():
     task4.set_performance_requirements(fps=fps_table[task4.name], latency=1000.0/fps_table[task4.name])
     task4.add_dependency("T3")  # 依赖MOTR
     tasks.append(task4)
-    print("  ✓ T4 qim: DSP+NPU混合任务 (依赖T3)")
+    print("  [OK] T4 qim: DSP+NPU混合任务 (依赖T3)")
     
     # 任务5: 2D姿态估计
     task5 = NNTask(
@@ -95,7 +95,7 @@ def create_real_tasks():
     task5.set_performance_requirements(fps=fps_table[task5.name], latency=1000.0/fps_table[task5.name])
     task5.add_dependency("T3")  # 依赖MOTR的检测结果
     tasks.append(task5)
-    print("  ✓ T5 pose2d: NPU任务 (依赖T3)")
+    print("  [OK] T5 pose2d: NPU任务 (依赖T3)")
     
     # 任务6: 模板匹配
     task6 = NNTask(
@@ -107,7 +107,7 @@ def create_real_tasks():
     task6.apply_model(get_model("tk_template"))
     task6.set_performance_requirements(fps=fps_table[task6.name], latency=1000.0/fps_table[task6.name])
     tasks.append(task6)
-    print("  ✓ T6 tk_temp: 纯NPU任务")
+    print("  [OK] T6 tk_temp: 纯NPU任务")
     
     # 任务7: 搜索任务
     task7 = NNTask(
@@ -119,7 +119,7 @@ def create_real_tasks():
     task7.apply_model(get_model("tk_search"))
     task7.set_performance_requirements(fps=fps_table[task7.name], latency=1000.0/fps_table[task7.name])
     tasks.append(task7)
-    print("  ✓ T7 tk_search: 纯NPU任务")
+    print("  [OK] T7 tk_search: 纯NPU任务")
     
     # 任务8：灰度Mask
     task8 = NNTask(
@@ -131,7 +131,7 @@ def create_real_tasks():
     task8.apply_model(get_model("graymask"))
     task8.set_performance_requirements(fps=fps_table[task8.name], latency=1000.0/fps_table[task8.name])
     tasks.append(task8)
-    print("  ✓ T8 GrayMask: 纯NPU任务")
+    print("  [OK] T8 GrayMask: 纯NPU任务")
         
     # 任务9: YOLOv8n 大模型
     task9 = NNTask(
@@ -143,7 +143,7 @@ def create_real_tasks():
     task9.apply_model(get_model("yolov8n_big"))
     task9.set_performance_requirements(fps=fps_table[task9.name], latency=1000.0/fps_table[task9.name])
     tasks.append(task9)
-    print("  ✓ T9 YoloV8nBig: 可分段NPU任务")
+    print("  [OK] T9 YoloV8nBig: 可分段NPU任务")
     
     # 任务10: YOLOv8n 小模型
     task10 = NNTask(
@@ -155,7 +155,7 @@ def create_real_tasks():
     task10.apply_model(get_model("yolov8n_small"))
     task10.set_performance_requirements(fps=fps_table[task10.name], latency=1000.0/fps_table[task10.name])
     tasks.append(task10)
-    print("  ✓ T10 YoloV8nSmall: 可分段NPU任务")
+    print("  [OK] T10 YoloV8nSmall: 可分段NPU任务")
     
     # 任务11: Stereo4x - 双目深度（关键任务）
     task11 = NNTask(
@@ -167,7 +167,7 @@ def create_real_tasks():
     task11.apply_model(get_model("stereo4x"))
     task11.set_performance_requirements(fps=fps_table[task11.name], latency=65.0)
     tasks.append(task11)
-    print("  ✓ T11 Stereo4x: 8段混合任务 (3 DSP + 5 NPU)")
+    print("  [OK] T11 Stereo4x: 8段混合任务 (3 DSP + 5 NPU)")
     
     # 任务12: Skywater 小模型
     task12 = NNTask(
@@ -179,7 +179,7 @@ def create_real_tasks():
     task12.apply_model(get_model("skywater"))
     task12.set_performance_requirements(fps=fps_table[task12.name], latency=100.0)
     tasks.append(task12)
-    print("  ✓ T12 Skywater: 可分段NPU+DSP任务")
+    print("  [OK] T12 Skywater: 可分段NPU+DSP任务")
     
     # 任务13: PeakDetector
     task13 = NNTask(
@@ -191,7 +191,7 @@ def create_real_tasks():
     task13.apply_model(get_model("peak_detector"))
     task13.set_performance_requirements(fps=fps_table[task13.name], latency=1000.0/fps_table[task13.name])
     tasks.append(task13)
-    print("  ✓ T13 PeakDetector: 纯NPU任务")
+    print("  [OK] T13 PeakDetector: 纯NPU任务")
     
     # 任务14: Skywater 大模型
     task14 = NNTask(
@@ -203,7 +203,7 @@ def create_real_tasks():
     task14.apply_model(get_model("skywater_big"))
     task14.set_performance_requirements(fps=fps_table[task14.name], latency=34.0)
     tasks.append(task14)
-    print("  ✓ T14 Skywater Mono: 可分段NPU+DSP任务")
+    print("  [OK] T14 Skywater Mono: 可分段NPU+DSP任务")
     
     # 任务15: Skywater 大模型
     task15 = NNTask(
@@ -215,7 +215,7 @@ def create_real_tasks():
     task15.apply_model(get_model("skywater_big"))
     task15.set_performance_requirements(fps=fps_table[task15.name], latency=34.0)
     tasks.append(task15)
-    print("  ✓ T15 Skywater Mono: 可分段NPU+DSP任务")
+    print("  [OK] T15 Skywater Mono: 可分段NPU+DSP任务")
     
     # 任务16: Skywater 大模型
     task16 = NNTask(
@@ -227,7 +227,7 @@ def create_real_tasks():
     task16.apply_model(get_model("skywater_big"))
     task16.set_performance_requirements(fps=fps_table[task16.name], latency=34.0)
     tasks.append(task16)
-    print("  ✓ T16 Skywater Mono3: 可分段NPU+DSP任务")
+    print("  [OK] T16 Skywater Mono3: 可分段NPU+DSP任务")
 
     # 任务17: 模板匹配
     task17 = NNTask(
@@ -239,14 +239,14 @@ def create_real_tasks():
     task17.apply_model(get_model("bonus_task"))
     task17.set_performance_requirements(fps=fps_table[task17.name], latency=1000.0/fps_table[task17.name])
     tasks.append(task17)
-    print("  ✓ T17 BonusTask: 奖励任务")
+    print("  [OK] T17 BonusTask: 奖励任务")
     
     return tasks
 
 
 def print_task_summary(tasks):
     """打印任务摘要"""
-    print("\n📊 任务摘要:")
+    print("\n[ANALYSIS] 任务摘要:")
     print("-" * 80)
     print(f"{'ID':<4} {'名称':<12} {'优先级':<10} {'运行时':<12} {'FPS':<6} {'延迟':<8} {'资源':<15} {'依赖':<10}")
     print("-" * 80)

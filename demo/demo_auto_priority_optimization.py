@@ -147,7 +147,7 @@ class PriorityOptimizer:
             else:  # 其余设为LOW
                 priority_config[task_id] = TaskPriority.LOW
         
-        print("\n🎯 初始优先级配置（基于任务特征）:")
+        print("\n[SUCCESS] 初始优先级配置（基于任务特征）:")
         self._print_priority_config(priority_config)
         
         return priority_config
@@ -275,7 +275,7 @@ class PriorityOptimizer:
     
     def optimize(self, max_iterations=50, max_time_seconds=300, target_satisfaction=1.0):
         """执行优化过程"""
-        print(f"\n🚀 开始自动优先级优化")
+        print(f"\n[DEMO] 开始自动优先级优化")
         print(f"  最大迭代次数: {max_iterations}")
         print(f"  最大运行时间: {max_time_seconds}秒")
         print(f"  目标满足率: {target_satisfaction*100}%")
@@ -295,7 +295,7 @@ class PriorityOptimizer:
                 break
             
             # 评估当前配置
-            print(f"\n📊 迭代 {iteration + 1}:")
+            print(f"\n[ANALYSIS] 迭代 {iteration + 1}:")
             result = self.evaluate_configuration(current_config)
             self.optimization_history.append(result)
             
@@ -309,7 +309,7 @@ class PriorityOptimizer:
             if best_result is None or result.total_satisfaction_rate > best_result.total_satisfaction_rate:
                 best_result = result
                 best_config = current_config.copy()
-                print(f"  ✨ 发现更好的配置！")
+                print(f"  [COMPLETE] 发现更好的配置！")
             
             # 检查是否达到目标
             if result.total_satisfaction_rate >= target_satisfaction:
@@ -328,7 +328,7 @@ class PriorityOptimizer:
                                  best_result: OptimizationResult):
         """打印优化结果摘要"""
         print("\n" + "=" * 100)
-        print("📊 优化结果摘要")
+        print("[ANALYSIS] 优化结果摘要")
         print("=" * 100)
         
         print(f"\n最佳配置（满足率: {best_result.total_satisfaction_rate:.1%}）:")
@@ -338,8 +338,8 @@ class PriorityOptimizer:
         
         for task_id, priority in sorted(best_config.items()):
             features = self.task_features[task_id]
-            fps_ok = "✓" if best_result.fps_satisfaction.get(task_id, False) else "✗"
-            latency_ok = "✓" if best_result.latency_satisfaction.get(task_id, False) else "✗"
+            fps_ok = "[OK]" if best_result.fps_satisfaction.get(task_id, False) else "[FAIL]"
+            latency_ok = "[OK]" if best_result.latency_satisfaction.get(task_id, False) else "[FAIL]"
             
             print(f"{task_id:<10} {features['name']:<15} {priority.name:<10} "
                   f"{fps_ok:<10} {latency_ok:<10}")
@@ -402,7 +402,7 @@ def main():
     optimizer.print_optimization_summary(best_config, best_result)
     
     # 可选：使用最佳配置运行详细分析
-    print("\n\n🔍 使用最佳配置运行详细分析...")
+    print("\n\n[DETAIL] 使用最佳配置运行详细分析...")
     
     # 应用最佳配置
     for task in tasks:

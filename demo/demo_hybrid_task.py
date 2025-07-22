@@ -23,7 +23,7 @@ import numpy as np
 
 def print_task_requirements(tasks):
     """打印任务要求概览"""
-    print("\n📋 任务要求概览:")
+    print("\n[INFO] 任务要求概览:")
     print("=" * 100)
     print(f"{'ID':<6} {'名称':<15} {'优先级':<10} {'FPS要求':<10} {'延迟要求(ms)':<15} {'分段策略':<20}")
     print("-" * 100)
@@ -36,7 +36,7 @@ def print_task_requirements(tasks):
 
 def analyze_task_demands(tasks, time_window=1000.0):
     """分析任务的资源需求"""
-    print("\n📊 资源需求分析 (带宽=40GB/s, 时间窗口=1000ms):")
+    print("\n[ANALYSIS] 资源需求分析 (带宽=40GB/s, 时间窗口=1000ms):")
     print("=" * 100)
     
     total_npu_demand = 0.0
@@ -76,12 +76,12 @@ def analyze_task_demands(tasks, time_window=1000.0):
     print(f"理论利用率: NPU={total_npu_demand/10:.1f}%, DSP={total_dsp_demand/10:.1f}%")
     
     if total_npu_demand > time_window or total_dsp_demand > time_window:
-        print("\n⚠️ 警告: 资源需求超过可用时间，部分任务可能无法满足FPS要求！")
+        print("\n[WARNING] 警告: 资源需求超过可用时间，部分任务可能无法满足FPS要求！")
 
 
 def test_scheduling_modes(time_window=1000.0):
     """测试不同的调度模式"""
-    print(f"\n\n🔬 调度模式对比测试 (时间窗口: {time_window}ms)")
+    print(f"\n\n[TEST] 调度模式对比测试 (时间窗口: {time_window}ms)")
     print("=" * 100)
     
     # 创建资源
@@ -157,7 +157,7 @@ def test_scheduling_modes(time_window=1000.0):
 
 def analyze_latency_performance(results):
     """分析并打印延迟性能，包含优先级信息"""
-    print("\n\n📊 延迟性能分析")
+    print("\n\n[ANALYSIS] 延迟性能分析")
     print("=" * 140)
     
     for mode_name, data in results.items():
@@ -186,8 +186,8 @@ def analyze_latency_performance(results):
         
         # 打印每个任务的信息
         for task_id, task, metrics in task_items:
-            fps_status = "✓" if metrics.fps_satisfaction else "✗"
-            latency_status = "✓" if metrics.latency_satisfaction_rate > 0.9 else "✗"
+            fps_status = "[OK]" if metrics.fps_satisfaction else "[FAIL]"
+            latency_status = "[OK]" if metrics.latency_satisfaction_rate > 0.9 else "[FAIL]"
             
             # 格式化优先级显示
             priority_str = task.priority.name
@@ -203,7 +203,7 @@ def analyze_latency_performance(results):
 
 def analyze_latency_performance_v2(results):
     """分析并打印延迟性能 - 更美观的版本"""
-    print("\n\n📊 延迟性能分析")
+    print("\n\n[ANALYSIS] 延迟性能分析")
     print("=" * 150)
     
     for mode_name, data in results.items():
@@ -239,8 +239,8 @@ def analyze_latency_performance_v2(results):
             latency_ok = metrics.latency_satisfaction_rate > 0.9
             
             # 使用颜色符号表示状态
-            fps_str = f"{metrics.achieved_fps:>8.1f} {'✓' if fps_ok else '✗'}"
-            rate_str = f"{metrics.latency_satisfaction_rate:>8.1%} {'✓' if latency_ok else '✗'}"
+            fps_str = f"{metrics.achieved_fps:>8.1f} {'[OK]' if fps_ok else '[FAIL]'}"
+            rate_str = f"{metrics.latency_satisfaction_rate:>8.1%} {'[OK]' if latency_ok else '[FAIL]'}"
             
             row = (
                 f"{task_id:^8} | {task.name:^15} | {task.priority.name:^10} | "
@@ -253,7 +253,7 @@ def analyze_latency_performance_v2(results):
 
 def print_detailed_task_analysis(results, task_id):
     """打印特定任务的详细分析"""
-    print(f"\n\n🔍 任务 {task_id} 详细分析")
+    print(f"\n\n[DETAIL] 任务 {task_id} 详细分析")
     print("=" * 80)
     
     for mode_name, data in results.items():
@@ -300,7 +300,7 @@ def print_detailed_task_analysis(results, task_id):
 
 def visualize_execution(results, time_range=(0, 200)):
     """可视化执行时间线"""
-    print(f"\n\n📊 执行时间线可视化")
+    print(f"\n\n[VISUAL] 执行时间线可视化")
     print("=" * 100)
     
     for mode_name, data in results.items():
@@ -314,14 +314,14 @@ def visualize_execution(results, time_range=(0, 200)):
         # 生成图片
         png_filename = f"hybrid_task_{mode_name.replace(' ', '_')}.png"
         visualizer.plot_resource_timeline(png_filename)
-        print(f"  ✓ 生成甘特图: {png_filename}")
+        print(f"  [OK] 生成甘特图: {png_filename}")
         
         # 生成Chrome Tracing JSON文件
         json_filename = f"hybrid_task_{mode_name.replace(' ', '_')}_trace.json"
         visualizer.export_chrome_tracing(json_filename)
-        print(f"  ✓ 生成Chrome Tracing文件: {json_filename}")
+        print(f"  [OK] 生成Chrome Tracing文件: {json_filename}")
     
-    print("\n💡 提示：在Chrome浏览器中打开 chrome://tracing 并加载JSON文件查看详细时间线")
+    print("\n[TIP] 提示：在Chrome浏览器中打开 chrome://tracing 并加载JSON文件查看详细时间线")
 
 
 def main():
@@ -356,7 +356,7 @@ def main():
     
     # 7. 总结
     print("\n\n" + "=" * 100)
-    print("📊 优化效果总结")
+    print("[SUMMARY] 优化效果总结")
     print("=" * 100)
     
     # 计算改进

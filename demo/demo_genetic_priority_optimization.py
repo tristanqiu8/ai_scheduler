@@ -263,7 +263,7 @@ class GeneticPriorityOptimizer:
         print(f"  目标适应度: {target_fitness}")
         
         # 初始化种群
-        print("\n📊 初始化种群...")
+        print("\n[ANALYSIS] 初始化种群...")
         population = [self.create_individual(guided=True) for _ in range(self.population_size)]
         
         # 评估初始种群
@@ -427,7 +427,7 @@ class GeneticPriorityOptimizer:
 def compare_with_baseline():
     """与基准配置对比"""
     print("\n\n" + "=" * 100)
-    print("📊 与原始配置对比")
+    print("[ANALYSIS] 与原始配置对比")
     print("=" * 100)
     
     tasks = create_real_tasks()

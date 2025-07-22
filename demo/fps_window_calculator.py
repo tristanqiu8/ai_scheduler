@@ -192,7 +192,7 @@ def print_fps_analysis_report(fps_list: List[int], max_window_ms: float = 1000.0
     report = analyze_fps_requirements(fps_list, max_window_ms)
     
     print("="*80)
-    print("📊 FPS要求与时间窗口分析")
+    print("[ANALYSIS] FPS要求与时间窗口分析")
     print("="*80)
     
     print(f"\nFPS要求: {report['fps_requirements']}")

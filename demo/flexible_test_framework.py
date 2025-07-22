@@ -7,6 +7,7 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 import os
 import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.resource_queue import ResourceQueueManager
 from core.schedule_tracer import ScheduleTracer
@@ -196,7 +197,7 @@ class SchedulingTestFramework:
         for config in configs:
             print(f"\n▶ 测试场景: {config.scenario_name}")
             self.run_test(config, verbose=False)
-            print(f"  ✓ 完成")
+            print(f"  [OK] 完成")
         
         # 打印对比结果
         self._print_comparison_results()
@@ -212,7 +213,7 @@ class SchedulingTestFramework:
         """
         os.makedirs(output_dir, exist_ok=True)
         
-        print(f"\n📊 生成可视化文件到 {output_dir}/")
+        print(f"\n[ANALYSIS] 生成可视化文件到 {output_dir}/")
         
         for name, result in self.results.items():
             # 生成文件名（去除特殊字符）
@@ -228,7 +229,7 @@ class SchedulingTestFramework:
             json_file = os.path.join(output_dir, f"{safe_name}.json")
             visualizer.export_chrome_tracing(json_file)
             
-            print(f"  ✓ {name}: {safe_name}.png, {safe_name}.json")
+            print(f"  [OK] {name}: {safe_name}.png, {safe_name}.json")
     
     def export_comparison_report(self, filename: str = "comparison_report.txt"):
         """导出对比报告"""
@@ -301,7 +302,7 @@ class SchedulingTestFramework:
         if not self.results:
             return
         
-        print("\n\n📊 对比结果汇总")
+        print("\n\n[ANALYSIS] 对比结果汇总")
         print("="*100)
         
         # 表头
@@ -337,3 +338,52 @@ class SchedulingTestFramework:
             for cell, width in zip(row, col_widths):
                 row_line += f"{cell:<{width}}"
             print(row_line)
+
+
+def demo_framework_usage():
+    """演示测试框架的用法"""
+    print("=" * 80)
+    print("[DEMO] 灵活调度测试框架演示")
+    print("=" * 80)
+    
+    print("[INFO] 这是一个用于调度系统测试的灵活框架")
+    print("\n框架功能:")
+    print("  - 支持多种资源配置的并行测试")
+    print("  - 自动收集和比较性能指标")
+    print("  - 生成详细的测试报告和可视化")
+    print("  - 可扩展的测试配置系统")
+    
+    print("\n主要类和方法:")
+    print("  - TestResult: 存储单次测试的结果数据")
+    print("  - SchedulingTestFramework: 主框架类")
+    print("    - run_test(): 运行单个配置测试")
+    print("    - print_comparison(): 打印结果对比表")
+    print("    - generate_report(): 生成详细报告")
+    
+    print("\n使用示例:")
+    print("  ```python")
+    print("  from flexible_test_framework import SchedulingTestFramework")
+    print("  from scenario.real_task import create_real_tasks")
+    print("  ")
+    print("  # 创建测试任务")
+    print("  tasks = create_real_tasks()")
+    print("  ")
+    print("  # 创建框架")
+    print("  framework = SchedulingTestFramework(tasks)")
+    print("  ")
+    print("  # 运行测试")
+    print("  result = framework.run_test(your_config)")
+    print("  ```")
+    
+    print("\n[TIP] 此框架设计用于:")
+    print("  - 对比不同资源配置的性能")
+    print("  - 自动化测试多种调度策略")
+    print("  - 生成系统性能评估报告")
+    print("  - 支持大规模调度实验")
+    
+    print("\n[OK] 框架说明完成")
+    print("[NOTE] 要实际运行测试，请确保配置类和依赖项正确设置")
+
+
+if __name__ == "__main__":
+    demo_framework_usage()

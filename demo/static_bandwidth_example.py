@@ -168,4 +168,4 @@ if __name__ == "__main__":
     # 演示带宽影响
     demonstrate_bandwidth_impact()
     
-    print("\n✅ 静态带宽方案演示完成！")
+    print("\n[OK] 静态带宽方案演示完成！")
