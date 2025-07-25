@@ -291,6 +291,134 @@ def create_bonus_task_model() -> List[ResourceSegment]:
         segment_id="main"
     )]
 
+# Op 4k60 nets
+def create_ml10t() -> List[ResourceSegment]:  # from vision
+    """ML 10T Base Framne: 纯NPU (base 52.86ms)"""
+    return [ResourceSegment(
+        resource_type=ResourceType.NPU,
+        duration_table={40: 3.037, 160: 0.881}, # 40 multiple is from 9.535/2.766 (svn)
+        start_time=0,
+        segment_id="main"
+    )]
+
+def create_ml10t_075() -> List[ResourceSegment]:  # first 75% discount
+    """ML 10T Big Framne: 纯NPU"""
+    return [ResourceSegment(
+        resource_type=ResourceType.NPU,
+        duration_table={40: 2.28, 160: 0.66},
+        start_time=0,
+        segment_id="main"
+    )]
+    
+def create_ml10t_bigmid() -> List[ResourceSegment]:
+    """ML 10T BigMid Framne: 纯NPU"""
+    return [ResourceSegment(
+        resource_type=ResourceType.NPU,
+        duration_table={40: 1.71, 160: 0.495},
+        start_time=0,
+        segment_id="main"
+    )]
+    
+def create_ml10t_midsmall() -> List[ResourceSegment]:
+    """ML 10T MidSmall Framne: 纯NPU"""
+    return [ResourceSegment(
+        resource_type=ResourceType.NPU,
+        duration_table={40: 0.855, 160: 0.2475},
+        start_time=0,
+        segment_id="main"
+    )]
+    
+def create_aimetliteplus() -> List[ResourceSegment]:
+    """aimetliteplus: 纯NPU + 可分段"""
+    segments = [
+        ResourceSegment(
+        resource_type=ResourceType.NPU,
+        duration_table={40: 19.61, 160: 12.747},
+        start_time=0,
+        segment_id="main"
+    )]
+    cut_points = {
+        "main": [
+            CutPoint(op_id="sub1", perf_lut={40: 1.346, 160: 1.013}, overhead_ms=0.0),
+            CutPoint(op_id="sub2", perf_lut={40: 4.98, 160: 4.295}, overhead_ms=0.0),
+            CutPoint(op_id="sub3", perf_lut={40: 3.803, 160: 3.191}, overhead_ms=0.0),
+            CutPoint(op_id="sub4", perf_lut={40: 1.398, 160: 0.915}, overhead_ms=0.0),
+            CutPoint(op_id="2023", perf_lut={40: 1.8, 160: 0.966}, overhead_ms=0.0),
+            CutPoint(op_id="matmul", perf_lut={40: 2.804, 160: 1.402}, overhead_ms=0.0), # 40G is predicted
+        ]
+    }
+    return segments, cut_points
+    
+def create_FaceEhnsLite() -> List[ResourceSegment]:
+    """FaceEhnsLites: 纯NPU + 可分段"""
+    segments = [
+        ResourceSegment(
+            resource_type=ResourceType.NPU,
+            duration_table={40: 19.62, 160: 8.19},
+            start_time=0,
+            segment_id="main"
+        )
+    ]
+    cut_points = {
+        "main": [
+            CutPoint(op_id="op4", perf_lut={40: 2.765, 160: 0.866}, overhead_ms=0.0),
+            CutPoint(op_id="op33", perf_lut={40: 8.828, 160: 3.593}, overhead_ms=0.0),
+            CutPoint(op_id="op42", perf_lut={40: 2.499, 160: 1.136}, overhead_ms=0.0),
+            # CutPoint(op_id="op47", perf_lut={40: 4.094, 160: 2.593}, overhead_ms=0.0),
+        ]
+    }
+    return segments, cut_points
+
+def create_vmask() -> List[ResourceSegment]:
+    """VMASK: 纯NPU + 可分段"""
+    segments = [
+        ResourceSegment(
+            resource_type=ResourceType.NPU,
+            duration_table={40: 11.0, 160: 3.746}, # 40Gbps perf is guessed
+            start_time=0,
+            segment_id="main"
+        )
+    ]
+    cut_points = {
+        "main": [
+            CutPoint(op_id="op104", perf_lut={40: 4.768, 160: 1.69}, overhead_ms=0.0),
+        ]
+    }
+    return segments, cut_points
+
+# def create_FD() -> List[ResourceSegment]:
+#     """FD: 纯NPU + 可分段"""
+#     segments = [
+#         ResourceSegment(
+#             resource_type=ResourceType.NPU,
+#             duration_table={160: 1.577},
+#             start_time=0,
+#             segment_id="main"
+#         )
+#     ]
+#     cut_points = {
+#         "main": [
+#             CutPoint(op_id="op104", perf_lut={}, overhead_ms=0.0),
+#         ]
+#     }
+#     return segments, cut_points
+
+# def create_PD_depth() -> List[ResourceSegment]:
+#     """PD_depth: 纯NPU + 可分段"""
+#     segments = [
+#         ResourceSegment(
+#             resource_type=ResourceType.NPU,
+#             duration_table={}, # 40Gbps perf is guessed
+#             start_time=0,
+#             segment_id="main"
+#         )
+#     ]
+#     cut_points = {
+#         "main": [
+#             CutPoint(op_id="op104", perf_lut={}, overhead_ms=0.0),
+#         ]
+#     }
+#     return segments, cut_points
 
 # 模型注册表
 MODEL_REGISTRY = {
@@ -309,6 +437,11 @@ MODEL_REGISTRY = {
     "peak_detector": create_peak_detector_model,
     "skywater_big": create_skywater_big_model,
     "bonus_task": create_bonus_task_model,
+    "ML10T_bigmid": create_ml10t_bigmid,
+    "ML10T_midsmall": create_ml10t_midsmall,
+    "AimetlitePlus": create_aimetliteplus,
+    "FaceEhnsLite": create_FaceEhnsLite,
+    "Vmask": create_vmask,
 }
 
 
