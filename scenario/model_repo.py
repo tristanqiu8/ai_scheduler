@@ -296,7 +296,7 @@ def create_ml10t() -> List[ResourceSegment]:  # from vision
     """ML 10T Base Framne: 纯NPU (base 52.86ms)"""
     return [ResourceSegment(
         resource_type=ResourceType.NPU,
-        duration_table={40: 3.037, 160: 0.881}, # 40 multiple is from 9.535/2.766 (svn)
+        duration_table={40: 182.22, 160: 52.86}, # 40 multiple is from 9.535/2.766 (svn)
         start_time=0,
         segment_id="main"
     )]
@@ -305,7 +305,7 @@ def create_ml10t_075() -> List[ResourceSegment]:  # first 75% discount
     """ML 10T Big Framne: 纯NPU"""
     return [ResourceSegment(
         resource_type=ResourceType.NPU,
-        duration_table={40: 2.28, 160: 0.66},
+        duration_table={40: 136.66, 160: 39.645},
         start_time=0,
         segment_id="main"
     )]
@@ -314,7 +314,7 @@ def create_ml10t_bigmid() -> List[ResourceSegment]:
     """ML 10T BigMid Framne: 纯NPU"""
     return [ResourceSegment(
         resource_type=ResourceType.NPU,
-        duration_table={40: 1.71, 160: 0.495},
+        duration_table={40: 102.50, 160: 29.73},
         start_time=0,
         segment_id="main"
     )]
@@ -323,12 +323,12 @@ def create_ml10t_midsmall() -> List[ResourceSegment]:
     """ML 10T MidSmall Framne: 纯NPU"""
     return [ResourceSegment(
         resource_type=ResourceType.NPU,
-        duration_table={40: 0.855, 160: 0.2475},
+        duration_table={40: 51.26, 160: 14.87},
         start_time=0,
         segment_id="main"
     )]
     
-def create_aimetliteplus() -> List[ResourceSegment]:
+def create_aimetliteplus() -> Tuple[List[ResourceSegment], Dict[str, List[CutPoint]]]:
     """aimetliteplus: 纯NPU + 可分段"""
     segments = [
         ResourceSegment(
@@ -348,8 +348,8 @@ def create_aimetliteplus() -> List[ResourceSegment]:
         ]
     }
     return segments, cut_points
-    
-def create_FaceEhnsLite() -> List[ResourceSegment]:
+
+def create_FaceEhnsLite() -> Tuple[List[ResourceSegment], Dict[str, List[CutPoint]]]:
     """FaceEhnsLites: 纯NPU + 可分段"""
     segments = [
         ResourceSegment(
@@ -369,7 +369,7 @@ def create_FaceEhnsLite() -> List[ResourceSegment]:
     }
     return segments, cut_points
 
-def create_vmask() -> List[ResourceSegment]:
+def create_vmask() -> Tuple[List[ResourceSegment], Dict[str, List[CutPoint]]]:
     """VMASK: 纯NPU + 可分段"""
     segments = [
         ResourceSegment(
@@ -386,39 +386,103 @@ def create_vmask() -> List[ResourceSegment]:
     }
     return segments, cut_points
 
-# def create_FD() -> List[ResourceSegment]:
-#     """FD: 纯NPU + 可分段"""
-#     segments = [
-#         ResourceSegment(
-#             resource_type=ResourceType.NPU,
-#             duration_table={160: 1.577},
-#             start_time=0,
-#             segment_id="main"
-#         )
-#     ]
-#     cut_points = {
-#         "main": [
-#             CutPoint(op_id="op104", perf_lut={}, overhead_ms=0.0),
-#         ]
-#     }
-#     return segments, cut_points
+def create_FD() -> List[ResourceSegment]:
+    """FD: 纯NPU + 可分段"""
+    segments = [
+        ResourceSegment(
+            resource_type=ResourceType.NPU,
+            duration_table={40: 2.909, 160: 1.577},
+            start_time=0,
+            segment_id="main"
+        )
+    ]
+    return segments
 
-# def create_PD_depth() -> List[ResourceSegment]:
-#     """PD_depth: 纯NPU + 可分段"""
-#     segments = [
-#         ResourceSegment(
-#             resource_type=ResourceType.NPU,
-#             duration_table={}, # 40Gbps perf is guessed
-#             start_time=0,
-#             segment_id="main"
-#         )
-#     ]
+def create_PD_depth() -> List[ResourceSegment]:
+    """PD_depth: 纯NPU + 可分段"""
+    segments = [
+        ResourceSegment(
+            resource_type=ResourceType.NPU,
+            duration_table={160: 4.968}, # 40Gbps perf is missing
+            start_time=0,
+            segment_id="main"
+        )
+    ]
 #     cut_points = {
 #         "main": [
-#             CutPoint(op_id="op104", perf_lut={}, overhead_ms=0.0),
+#             CutPoint(op_id="op1", perf_lut={}, overhead_ms=0.0),
+#         ]
+#     }
+    return segments
+
+def create_cam_parsing() -> List[ResourceSegment]:
+    """Parsing: 纯NPU + 可分段"""
+    segments = [
+        ResourceSegment(
+            resource_type=ResourceType.NPU,
+            duration_table={160: 0.421}, # no 40Gbps perf
+            start_time=0,
+            segment_id="main"
+        )
+    ]
+    return segments
+
+# def create_AFTK() -> Tuple[List[ResourceSegment], Dict[str, List[CutPoint]]]:
+def create_AFTK() -> List[ResourceSegment]:
+    """AF TK: 纯NPU + 可分段"""
+    segments = [
+        ResourceSegment(
+            resource_type=ResourceType.NPU,
+            duration_table={160: 3.602}, # no 40Gbps perf
+            start_time=0,
+            segment_id="main"
+        )
+    ]
+#     cut_points = {
+#         "main": [
+#             CutPoint(op_id="op1", perf_lut={}, overhead_ms=0.0),
 #         ]
 #     }
 #     return segments, cut_points
+    return segments
+
+# def create_AFTK() -> Tuple[List[ResourceSegment], Dict[str, List[CutPoint]]]:
+def create_PD_dns() -> List[ResourceSegment]:
+    """PD DNS: 纯NPU + 可分段"""
+    segments = [
+        ResourceSegment(
+            resource_type=ResourceType.NPU,
+            duration_table={160: 0.593}, # no 40Gbps perf
+            start_time=0,
+            segment_id="main"
+        )
+    ]
+#     cut_points = {
+#         "main": [
+#             CutPoint(op_id="op1", perf_lut={}, overhead_ms=0.0),
+#         ]
+#     }
+#     return segments, cut_points
+    return segments
+
+# def create_AFTK() -> Tuple[List[ResourceSegment], Dict[str, List[CutPoint]]]:
+def create_NN_tone() -> List[ResourceSegment]:
+    """NN Tone: 纯NPU + 可分段"""
+    segments = [
+        ResourceSegment(
+            resource_type=ResourceType.NPU,
+            duration_table={160: 2.15}, # no 40Gbps perf
+            start_time=0,
+            segment_id="main"
+        )
+    ]
+#     cut_points = {
+#         "main": [
+#             CutPoint(op_id="op1", perf_lut={}, overhead_ms=0.0),
+#         ]
+#     }
+#     return segments, cut_points
+    return segments
 
 # 模型注册表
 MODEL_REGISTRY = {
@@ -437,11 +501,18 @@ MODEL_REGISTRY = {
     "peak_detector": create_peak_detector_model,
     "skywater_big": create_skywater_big_model,
     "bonus_task": create_bonus_task_model,
+    # Camera 9+2 nets
     "ML10T_bigmid": create_ml10t_bigmid,
     "ML10T_midsmall": create_ml10t_midsmall,
     "AimetlitePlus": create_aimetliteplus,
     "FaceEhnsLite": create_FaceEhnsLite,
     "Vmask": create_vmask,
+    "FaceDet": create_FD,
+    "Cam_Parsing": create_cam_parsing,
+    "NNTone": create_NN_tone,
+    "PD_DNS": create_PD_dns,
+    "PD_Depth": create_PD_depth,
+    "AF_TK": create_AFTK,
 }
 
 
