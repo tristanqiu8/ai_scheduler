@@ -296,7 +296,7 @@ def create_ml10t() -> List[ResourceSegment]:  # from vision
     """ML 10T Base Framne: 纯NPU (base 52.86ms)"""
     return [ResourceSegment(
         resource_type=ResourceType.NPU,
-        duration_table={40: 182.22, 160: 52.86}, # 40 multiple is from 9.535/2.766 (svn)
+        duration_table={40: 58.78, 160: 52.86}, # 40 multiple is from 1.112
         start_time=0,
         segment_id="main"
     )]
@@ -305,7 +305,7 @@ def create_ml10t_075() -> List[ResourceSegment]:  # first 75% discount
     """ML 10T Big Framne: 纯NPU"""
     return [ResourceSegment(
         resource_type=ResourceType.NPU,
-        duration_table={40: 136.66, 160: 39.645},
+        duration_table={40: 44.085, 160: 39.645},
         start_time=0,
         segment_id="main"
     )]
@@ -314,7 +314,7 @@ def create_ml10t_bigmid() -> List[ResourceSegment]:
     """ML 10T BigMid Framne: 纯NPU"""
     return [ResourceSegment(
         resource_type=ResourceType.NPU,
-        duration_table={40: 102.50, 160: 29.73},
+        duration_table={40: 33.06, 160: 29.73},
         start_time=0,
         segment_id="main"
     )]
@@ -323,7 +323,7 @@ def create_ml10t_midsmall() -> List[ResourceSegment]:
     """ML 10T MidSmall Framne: 纯NPU"""
     return [ResourceSegment(
         resource_type=ResourceType.NPU,
-        duration_table={40: 51.26, 160: 14.87},
+        duration_table={40: 16.535, 160: 14.87},
         start_time=0,
         segment_id="main"
     )]
@@ -399,56 +399,83 @@ def create_FD() -> List[ResourceSegment]:
     return segments
 
 def create_PD_depth() -> List[ResourceSegment]:
-    """PD_depth: 纯NPU + 可分段"""
-    segments = [
-        ResourceSegment(
-            resource_type=ResourceType.NPU,
-            duration_table={160: 4.968}, # 40Gbps perf is missing
-            start_time=0,
-            segment_id="main"
-        )
+    """PD_depth: NPU + DSP复杂混合网络"""
+    segments = []
+    segment_configs = [
+        (ResourceType.NPU, {40: 0.41, 160: 0.15}, "npu_s0"),
+        (ResourceType.DSP, {80: 0.46}, "dsp_s0"),
+        (ResourceType.NPU, {40: 0.60, 160: 0.33}, "npu_s1"),
+        (ResourceType.DSP, {80: 0.46}, "dsp_s1"),
+        (ResourceType.NPU, {40: 0.42, 160: 0.16}, "npu_s2"),
+        (ResourceType.DSP, {80: 0.46}, "dsp_s2"),
+        (ResourceType.NPU, {40: 0.54, 160: 0.23}, "npu_s3"),
+        (ResourceType.DSP, {80: 0.46}, "dsp_s3"),
+        (ResourceType.NPU, {40: 0.53, 160: 0.23}, "npu_s4"),
+        (ResourceType.DSP, {80: 0.46}, "dsp_s4"),
+        (ResourceType.NPU, {40: 0.71, 160: 0.43}, "npu_s5"),
+        (ResourceType.DSP, {80: 0.46}, "dsp_s5"),
+        (ResourceType.NPU, {40: 0.57, 160: 0.38}, "npu_s6"),
+        (ResourceType.DSP, {80: 0.46}, "dsp_s6"),
+        (ResourceType.NPU, {40: 2.42, 160: 1.52}, "npu_s7"),
+        (ResourceType.DSP, {80: 0.46}, "dsp_s7"),
+        (ResourceType.NPU, {40: 1.92, 160: 1.23}, "npu_s8"),
+        (ResourceType.DSP, {80: 0.46}, "dsp_s8"),
+        (ResourceType.NPU, {40: 0.58, 160: 0.31}, "npu_s9"),
     ]
-#     cut_points = {
-#         "main": [
-#             CutPoint(op_id="op1", perf_lut={}, overhead_ms=0.0),
-#         ]
-#     }
+    
+    for resource_type, duration_table, segment_id in segment_configs:
+        seg = ResourceSegment(
+            resource_type=resource_type,
+            duration_table=duration_table,
+            start_time=0,
+            segment_id=segment_id
+        )
+        segments.append(seg)
     return segments
 
 def create_cam_parsing() -> List[ResourceSegment]:
-    """Parsing: 纯NPU + 可分段"""
+    """Parsing: 纯NPU"""
     segments = [
         ResourceSegment(
             resource_type=ResourceType.NPU,
-            duration_table={160: 0.421}, # no 40Gbps perf
+            duration_table={40: 0.595, 160: 0.421},
             start_time=0,
             segment_id="main"
         )
     ]
     return segments
 
-# def create_AFTK() -> Tuple[List[ResourceSegment], Dict[str, List[CutPoint]]]:
 def create_AFTK() -> List[ResourceSegment]:
-    """AF TK: 纯NPU + 可分段"""
-    segments = [
-        ResourceSegment(
-            resource_type=ResourceType.NPU,
-            duration_table={160: 3.602}, # no 40Gbps perf
-            start_time=0,
-            segment_id="main"
-        )
+    """AF TK: NPU + DSP复杂混合"""
+    segments = []
+    
+    # 定义所有段
+    # DSP all 6.802, averaged as for now
+    segment_configs = [
+        (ResourceType.DSP, {80: 1.700}, "dsp_s0"),
+        (ResourceType.NPU, {40: 0.232, 160: 0.140}, "npu_s0"),
+        (ResourceType.NPU, {40: 0.392, 160: 0.203}, "npu_s1"),
+        (ResourceType.DSP, {80: 1.700}, "dsp_s1"),
+        (ResourceType.NPU, {40:6.438, 160: 2.988}, "npu_s2"),
+        (ResourceType.DSP, {80: 1.700}, "dsp_s2"),
+        (ResourceType.NPU, {40: 0.392, 160: 0.203}, "npu_s3"),
+        (ResourceType.DSP, {80: 1.700}, "dsp_s3"),
+        (ResourceType.NPU, {40: 0.176, 160: 0.068}, "npu_s4"),
     ]
-#     cut_points = {
-#         "main": [
-#             CutPoint(op_id="op1", perf_lut={}, overhead_ms=0.0),
-#         ]
-#     }
-#     return segments, cut_points
+    
+    for resource_type, duration_table, segment_id in segment_configs:
+        seg = ResourceSegment(
+            resource_type=resource_type,
+            duration_table=duration_table,
+            start_time=0,
+            segment_id=segment_id
+        )
+        segments.append(seg)
+    
     return segments
 
-# def create_AFTK() -> Tuple[List[ResourceSegment], Dict[str, List[CutPoint]]]:
 def create_PD_dns() -> List[ResourceSegment]:
-    """PD DNS: 纯NPU + 可分段"""
+    """PD DNS: 纯NPU"""
     segments = [
         ResourceSegment(
             resource_type=ResourceType.NPU,
@@ -457,31 +484,18 @@ def create_PD_dns() -> List[ResourceSegment]:
             segment_id="main"
         )
     ]
-#     cut_points = {
-#         "main": [
-#             CutPoint(op_id="op1", perf_lut={}, overhead_ms=0.0),
-#         ]
-#     }
-#     return segments, cut_points
     return segments
 
-# def create_AFTK() -> Tuple[List[ResourceSegment], Dict[str, List[CutPoint]]]:
 def create_NN_tone() -> List[ResourceSegment]:
-    """NN Tone: 纯NPU + 可分段"""
+    """NN Tone: 纯NPU"""
     segments = [
         ResourceSegment(
             resource_type=ResourceType.NPU,
-            duration_table={160: 2.15}, # no 40Gbps perf
+            duration_table={40: 3.496, 160: 2.15}, # no 40Gbps perf
             start_time=0,
             segment_id="main"
         )
     ]
-#     cut_points = {
-#         "main": [
-#             CutPoint(op_id="op1", perf_lut={}, overhead_ms=0.0),
-#         ]
-#     }
-#     return segments, cut_points
     return segments
 
 # 模型注册表
