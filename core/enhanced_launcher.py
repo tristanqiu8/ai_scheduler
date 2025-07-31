@@ -191,7 +191,7 @@ class EnhancedTaskLauncher:
     def _calculate_launch_time_with_dependencies(
         self, task_id: str, instance: int, base_time: float, time_window: float
     ) -> float:
-        """计算考虑依赖关系的发射时间"""
+        """计算考虑依赖关系的发射时间（支持帧率感知的依赖映射）"""
         config = self.task_configs[task_id]
         launch_time = base_time
         
@@ -200,8 +200,11 @@ class EnhancedTaskLauncher:
             if dep_task_id not in self.task_configs:
                 continue
                 
+            # 使用帧率感知的依赖实例映射
+            dep_instance = self._get_dependency_instance(task_id, instance, dep_task_id)
+            
             # 估算依赖任务的完成时间
-            dep_completion = self._estimate_dependency_completion(dep_task_id, instance)
+            dep_completion = self._estimate_dependency_completion(dep_task_id, dep_instance)
             
             # 确保在依赖完成后发射（留1ms余量）
             launch_time = max(launch_time, dep_completion + 1.0)
@@ -212,6 +215,26 @@ class EnhancedTaskLauncher:
             launch_time = max(launch_time, min_time)
             
         return launch_time
+    
+    def _get_dependency_instance(self, task_id: str, instance_id: int, dep_id: str) -> int:
+        """获取依赖任务的实例号（考虑帧率差异）"""
+        config = self.task_configs[task_id]
+        dep_config = self.task_configs.get(dep_id)
+        
+        if not dep_config:
+            return instance_id
+        
+        # 如果依赖任务的帧率较低，需要映射到合适的实例
+        if dep_config.fps_requirement < config.fps_requirement:
+            # 计算帧率比例
+            fps_ratio = config.fps_requirement / dep_config.fps_requirement
+            # 映射到依赖任务的实例号（向下取整）
+            dep_instance = int(instance_id / fps_ratio)
+        else:
+            # 依赖任务帧率相同或更高，使用相同的实例号
+            dep_instance = instance_id
+        
+        return dep_instance
         
     def _estimate_dependency_completion(self, task_id: str, instance_id: int) -> float:
         """估算依赖任务的完成时间"""

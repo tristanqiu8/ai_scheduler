@@ -311,16 +311,39 @@ class TaskLauncher:
         return True
         
     def _check_dependencies(self, task_id: str, instance_id: int) -> bool:
-        """检查任务依赖是否满足"""
+        """检查任务依赖是否满足（支持不同帧率的依赖）"""
         config = self.task_configs[task_id]
         
         for dep_id in config.dependencies:
-            # 检查相同实例号的依赖任务是否完成
-            dep_key = (dep_id, instance_id)
+            # 获取依赖任务的实际实例号
+            dep_instance = self._get_dependency_instance(task_id, instance_id, dep_id)
+            
+            # 检查映射后的依赖是否完成
+            dep_key = (dep_id, dep_instance)
             if dep_key not in self.task_completions:
                 return False
                 
         return True
+    
+    def _get_dependency_instance(self, task_id: str, instance_id: int, dep_id: str) -> int:
+        """获取依赖任务的实例号（考虑帧率差异）"""
+        config = self.task_configs[task_id]
+        dep_config = self.task_configs.get(dep_id)
+        
+        if not dep_config:
+            return instance_id
+        
+        # 如果依赖任务的帧率较低，需要映射到合适的实例
+        if dep_config.fps_requirement < config.fps_requirement:
+            # 计算帧率比例
+            fps_ratio = config.fps_requirement / dep_config.fps_requirement
+            # 映射到依赖任务的实例号（向下取整）
+            dep_instance = int(instance_id / fps_ratio)
+        else:
+            # 依赖任务帧率相同或更高，使用相同的实例号
+            dep_instance = instance_id
+        
+        return dep_instance
         
     def _estimate_task_duration(self, task: NNTask) -> float:
         """估算任务执行时间"""

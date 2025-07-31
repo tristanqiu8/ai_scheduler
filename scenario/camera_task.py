@@ -14,7 +14,7 @@ def create_real_tasks():
     tasks = []
     
     print("\n[INFO] 创建测试任务:")
-    Main_Freq = 30
+    Main_Freq = 15
     fps_table = {
         "ML10T_bigmid": Main_Freq,
         "ML10T_midsmall": Main_Freq,
