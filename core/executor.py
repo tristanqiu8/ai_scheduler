@@ -15,6 +15,9 @@ from core.schedule_tracer import ScheduleTracer
 from core.launcher import LaunchPlan, LaunchEvent
 from core.task import NNTask
 
+# 全局日志开关
+ENABLE_EXECUTION_LOG = False
+
 
 @dataclass
 class TaskInstance:
@@ -198,8 +201,9 @@ class ScheduleExecutor:
         
         self.task_instances[instance.instance_key] = instance
         
-        print(f"{self.current_time:>8.1f}ms: [LAUNCH] {event.task_id}#{event.instance_id} "
-              f"({len(segments)} segments, priority={task.priority.name})")
+        if ENABLE_EXECUTION_LOG:
+            print(f"{self.current_time:>8.1f}ms: [LAUNCH] {event.task_id}#{event.instance_id} "
+                  f"({len(segments)} segments, priority={task.priority.name})")
     
     def _handle_completion_event(self, completion: SegmentCompletion, use_segment_mode: bool):
         """处理段完成事件"""
@@ -212,14 +216,16 @@ class ScheduleExecutor:
         # 标记段完成
         instance.mark_segment_completed(completion.segment_index)
         
-        print(f"{completion.completion_time:>8.1f}ms: [COMPLETE] "
-              f"{completion.task_id}#{completion.instance_id}_seg{completion.segment_index}")
+        if ENABLE_EXECUTION_LOG:
+            print(f"{completion.completion_time:>8.1f}ms: [COMPLETE] "
+                  f"{completion.task_id}#{completion.instance_id}_seg{completion.segment_index}")
         
         # 检查任务是否全部完成
         if instance.is_completed and instance.completion_time is None:
             instance.completion_time = completion.completion_time
-            print(f"{completion.completion_time:>8.1f}ms: [TASK_COMPLETE] "
-                  f"{completion.task_id}#{completion.instance_id}")
+            if ENABLE_EXECUTION_LOG:
+                print(f"{completion.completion_time:>8.1f}ms: [TASK_COMPLETE] "
+                      f"{completion.task_id}#{completion.instance_id}")
     
     def _schedule_segments_traditional(self):
         """传统模式调度：按顺序执行段"""
@@ -280,7 +286,8 @@ class ScheduleExecutor:
             [segment]
         )
         
-        print(f"{self.current_time:>8.1f}ms: [ENQUEUE] {segment_id} to {queue.resource_id}")
+        if ENABLE_EXECUTION_LOG:
+            print(f"{self.current_time:>8.1f}ms: [ENQUEUE] {segment_id} to {queue.resource_id}")
     
     def _execute_ready_tasks(self):
         """在所有资源上执行就绪的任务"""
@@ -321,8 +328,9 @@ class ScheduleExecutor:
         task_id = task_id_parts[0]
         instance_id = int(task_id_parts[1]) if len(task_id_parts) > 1 else 0
         
-        print(f"{self.current_time:>8.1f}ms: [EXECUTE] {queued_task.task_id} on {queue.resource_id} "
-              f"(duration={end_time - self.current_time:.1f}ms, priority={queued_task.priority.name})")
+        if ENABLE_EXECUTION_LOG:
+            print(f"{self.current_time:>8.1f}ms: [EXECUTE] {queued_task.task_id} on {queue.resource_id} "
+                  f"(duration={end_time - self.current_time:.1f}ms, priority={queued_task.priority.name})")
         
         # 添加完成事件
         completion = SegmentCompletion(
@@ -420,3 +428,13 @@ def create_executor(queue_manager: ResourceQueueManager,
     if mode == "segment_aware":
         executor.segment_mode = True
     return executor
+
+
+def set_execution_log_enabled(enabled: bool):
+    """设置执行日志开关
+    
+    Args:
+        enabled: True 启用日志，False 禁用日志（默认）
+    """
+    global ENABLE_EXECUTION_LOG
+    ENABLE_EXECUTION_LOG = enabled
