@@ -151,6 +151,35 @@ def test_scheduling_modes(time_window=1000.0):
         print(f"  最大延迟: {metrics.max_latency:.1f}ms")
         print(f"  NPU利用率: {metrics.avg_npu_utilization:.1f}%")
         print(f"  DSP利用率: {metrics.avg_dsp_utilization:.1f}%")
+        
+        # 计算总功耗和DDR带宽
+        total_power = 0.0  # mW
+        total_ddr = 0.0  # MB
+        total_fps = 0.0
+        
+        # 遍历每个任务的执行情况
+        for task_id, task_metrics in evaluator.task_metrics.items():
+            task = next((t for t in launcher.tasks.values() if t.task_id == task_id), None)
+            if not task:
+                continue
+            
+            # 获取该任务在1秒内的执行帧数
+            frames_per_second = task_metrics.achieved_fps
+            total_fps += frames_per_second
+            
+            # 累加每个segment的功耗和DDR
+            for segment in task.segments:
+                # 每帧的功耗和DDR乘以FPS得到每秒的总量
+                total_power += segment.power * frames_per_second
+                total_ddr += segment.ddr * frames_per_second
+        
+        # 转换单位并打印
+        total_power_w = total_power / 1000.0
+        total_ddr_gb = total_ddr / 1024.0
+        
+        print(f"  总FPS: {total_fps:.2f} FPS")
+        print(f"  总功耗: {total_power:.2f} mW ({total_power_w:.3f} W)")
+        print(f"  DDR带宽: {total_ddr:.2f} MB/s ({total_ddr_gb:.3f} GB/s)")
     
     return results
 

@@ -37,6 +37,10 @@ class ResourceSegment:
     start_time: float  # Start time relative to task beginning
     segment_id: str = ""  # Unique identifier for this segment
     
+    # Power and DDR bandwidth attributes
+    power: float = 0.0  # Power consumption in mW per frame
+    ddr: float = 0.0  # DDR bandwidth consumption in MB per frame
+    
     # Network cutting related attributes
     cut_points: List[CutPoint] = field(default_factory=list)
     sub_segments: List[SubSegment] = field(default_factory=list)

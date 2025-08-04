@@ -219,6 +219,43 @@ class PriorityOptimizer:
         
         print(f"[SEGMENT ANALYSIS] Total segment executions: {total_segment_executions}")
         
+        # 计算总功耗和DDR带宽
+        total_power = 0.0  # mW
+        total_ddr = 0.0  # MB
+        
+        # 遍历每个任务的执行情况
+        for task_id, task_metrics in evaluator.task_metrics.items():
+            task = next((t for t in self.tasks if t.task_id == task_id), None)
+            if not task:
+                continue
+            
+            # 获取该任务在1秒内的执行帧数
+            frames_per_second = task_metrics.achieved_fps
+            
+            # 累加每个segment的功耗和DDR
+            for segment in task.segments:
+                # 每帧的功耗和DDR乘以FPS得到每秒的总量
+                total_power += segment.power * frames_per_second
+                total_ddr += segment.ddr * frames_per_second
+        
+        # 转换单位：mW转W，MB转GB
+        total_power_w = total_power / 1000.0
+        total_ddr_gb = total_ddr / 1024.0
+        
+        print(f"[POWER ANALYSIS] Total dynamic power consumption: {total_power:.2f} mW ({total_power_w:.3f} W)")
+        print(f"[DDR ANALYSIS] Total DDR bandwidth consumption: {total_ddr:.2f} MB/s ({total_ddr_gb:.3f} GB/s)")
+        
+        # 计算System利用率（DSP或NPU忙碌的时间）
+        npu_utilization = metrics.avg_npu_utilization / 100.0  # 转换为小数
+        dsp_utilization = metrics.avg_dsp_utilization / 100.0  # 转换为小数
+        
+        # System利用率 = 1 - (1 - NPU利用率) * (1 - DSP利用率)
+        # 即至少有一个资源在工作的时间比例
+        system_idle_rate = (1 - npu_utilization) * (1 - dsp_utilization)
+        system_utilization = (1 - system_idle_rate) * 100.0
+        
+        print(f"[SYSTEM ANALYSIS] System utilization (DSP or NPU busy): {system_utilization:.1f}%")
+        
         satisfaction_rate = total_satisfied / len(evaluator.task_metrics)
         
         return OptimizationResult(
@@ -317,6 +354,12 @@ class PriorityOptimizer:
             print(f"  资源利用率: NPU={result.resource_utilization['NPU']:.1f}%, "
                   f"DSP={result.resource_utilization['DSP']:.1f}%")
             
+            # 计算并打印System利用率
+            npu_util = result.resource_utilization['NPU'] / 100.0
+            dsp_util = result.resource_utilization['DSP'] / 100.0
+            system_util = (1 - (1 - npu_util) * (1 - dsp_util)) * 100.0
+            print(f"  System利用率: {system_util:.1f}%")
+            
             # 更新最佳结果
             if best_result is None or result.total_satisfaction_rate > best_result.total_satisfaction_rate:
                 best_result = result
@@ -358,15 +401,20 @@ class PriorityOptimizer:
         
         # 打印优化历史
         print(f"\n优化历史（共{len(self.optimization_history)}次迭代）:")
-        print("-" * 60)
-        print(f"{'迭代':<6} {'满足率':<10} {'平均延迟':<12} {'NPU利用率':<12} {'DSP利用率':<12}")
-        print("-" * 60)
+        print("-" * 100)
+        print(f"{'迭代':<6} {'满足率':<10} {'平均延迟':<12} {'NPU利用率':<12} {'DSP利用率':<12} {'System利用率':<12}")
+        print("-" * 100)
         
         for i, result in enumerate(self.optimization_history[-10:]):  # 只显示最后10次
+            npu_util = result.resource_utilization['NPU'] / 100.0
+            dsp_util = result.resource_utilization['DSP'] / 100.0
+            system_util = (1 - (1 - npu_util) * (1 - dsp_util)) * 100.0
+            
             print(f"{i+1:<6} {result.total_satisfaction_rate:<10.1%} "
                   f"{result.avg_latency:<12.1f} "
                   f"{result.resource_utilization['NPU']:<12.1f} "
-                  f"{result.resource_utilization['DSP']:<12.1f}")
+                  f"{result.resource_utilization['DSP']:<12.1f} "
+                  f"{system_util:<12.1f}")
         
         # 保存最佳配置
         self.save_best_configuration(best_config, best_result)
