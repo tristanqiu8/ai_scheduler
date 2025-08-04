@@ -382,8 +382,8 @@ def create_aimetliteplus() -> Tuple[List[ResourceSegment], Dict[str, List[CutPoi
         duration_table={40: 19.61, 160: 12.747},
         start_time=0,
         segment_id="main",
-        power=350.0,  # 350mW per frame
-        ddr=20.0  # 20MB per frame
+        power=392.01,
+        ddr=19.792
     )]
     cut_points = {
         "main": [
@@ -405,8 +405,8 @@ def create_FaceEhnsLite() -> Tuple[List[ResourceSegment], Dict[str, List[CutPoin
             duration_table={40: 19.62, 160: 8.19},
             start_time=0,
             segment_id="main",
-            power=320.0,  # 320mW per frame
-            ddr=16.0  # 16MB per frame
+            power=263.88,
+            ddr=70.15
         )
     ]
     cut_points = {
@@ -427,8 +427,8 @@ def create_vmask() -> Tuple[List[ResourceSegment], Dict[str, List[CutPoint]]]:
             duration_table={40: 11.0, 160: 3.746}, # 40Gbps perf is guessed
             start_time=0,
             segment_id="main",
-            power=200.0,  # 200mW per frame
-            ddr=12.0  # 12MB per frame
+            power=58.93,
+            ddr=25.061
         )
     ]
     cut_points = {
@@ -446,8 +446,8 @@ def create_FD() -> List[ResourceSegment]:
             duration_table={40: 2.909, 160: 1.577},
             start_time=0,
             segment_id="main",
-            power=100.0,  # 100mW per frame
-            ddr=6.0  # 6MB per frame
+            power=22.4,
+            ddr=11.473
         )
     ]
     return segments
@@ -456,25 +456,25 @@ def create_PD_depth() -> List[ResourceSegment]:
     """PD_depth: NPU + DSP复杂混合网络"""
     segments = []
     segment_configs = [
-        (ResourceType.NPU, {40: 0.41, 160: 0.15}, "npu_s0", 20.0, 1.2),
+        (ResourceType.NPU, {40: 0.41, 160: 0.15}, "npu_s0", 59.89, 29.531),
         (ResourceType.DSP, {80: 0.46}, "dsp_s0", 0.0, 0.0),
-        (ResourceType.NPU, {40: 0.60, 160: 0.33}, "npu_s1", 30.0, 1.8),
+        (ResourceType.NPU, {40: 0.60, 160: 0.33}, "npu_s1", 0.0, 0.0),
         (ResourceType.DSP, {80: 0.46}, "dsp_s1", 0.0, 0.0),
-        (ResourceType.NPU, {40: 0.42, 160: 0.16}, "npu_s2", 22.0, 1.3),
+        (ResourceType.NPU, {40: 0.42, 160: 0.16}, "npu_s2", 0.0, 0.0),
         (ResourceType.DSP, {80: 0.46}, "dsp_s2", 0.0, 0.0),
-        (ResourceType.NPU, {40: 0.54, 160: 0.23}, "npu_s3", 28.0, 1.6),
+        (ResourceType.NPU, {40: 0.54, 160: 0.23}, "npu_s3", 0.0, 0.0),
         (ResourceType.DSP, {80: 0.46}, "dsp_s3", 0.0, 0.0),
-        (ResourceType.NPU, {40: 0.53, 160: 0.23}, "npu_s4", 27.0, 1.5),
+        (ResourceType.NPU, {40: 0.53, 160: 0.23}, "npu_s4", 0.0, 0.0),
         (ResourceType.DSP, {80: 0.46}, "dsp_s4", 0.0, 0.0),
-        (ResourceType.NPU, {40: 0.71, 160: 0.43}, "npu_s5", 35.0, 2.0),
+        (ResourceType.NPU, {40: 0.71, 160: 0.43}, "npu_s5", 0.0, 0.0),
         (ResourceType.DSP, {80: 0.46}, "dsp_s5", 0.0, 0.0),
-        (ResourceType.NPU, {40: 0.57, 160: 0.38}, "npu_s6", 29.0, 1.7),
+        (ResourceType.NPU, {40: 0.57, 160: 0.38}, "npu_s6", 0.0, 0.0),
         (ResourceType.DSP, {80: 0.46}, "dsp_s6", 0.0, 0.0),
-        (ResourceType.NPU, {40: 2.42, 160: 1.52}, "npu_s7", 90.0, 5.0),
+        (ResourceType.NPU, {40: 2.42, 160: 1.52}, "npu_s7", 0.0, 0.0),
         (ResourceType.DSP, {80: 0.46}, "dsp_s7", 0.0, 0.0),
-        (ResourceType.NPU, {40: 1.92, 160: 1.23}, "npu_s8", 75.0, 4.2),
+        (ResourceType.NPU, {40: 1.92, 160: 1.23}, "npu_s8", 0.0, 0.0),
         (ResourceType.DSP, {80: 0.46}, "dsp_s8", 0.0, 0.0),
-        (ResourceType.NPU, {40: 0.58, 160: 0.31}, "npu_s9", 30.0, 1.7),
+        (ResourceType.NPU, {40: 0.58, 160: 0.31}, "npu_s9", 0.0, 0.0),
     ]
     
     for resource_type, duration_table, segment_id, power, ddr in segment_configs:
@@ -497,8 +497,8 @@ def create_cam_parsing() -> List[ResourceSegment]:
             duration_table={40: 0.595, 160: 0.421},
             start_time=0,
             segment_id="main",
-            power=60.0,  # 60mW per frame
-            ddr=3.5  # 3.5MB per frame
+            power=4.0,  # 60mW per frame
+            ddr=2.961  # 3.5MB per frame
         )
     ]
     return segments
@@ -511,14 +511,14 @@ def create_AFTK() -> List[ResourceSegment]:
     # DSP all 6.802, averaged as for now
     segment_configs = [
         (ResourceType.DSP, {80: 1.700}, "dsp_s0", 0.0, 0.0),
-        (ResourceType.NPU, {40: 0.232, 160: 0.140}, "npu_s0", 15.0, 1.0),
-        (ResourceType.NPU, {40: 0.392, 160: 0.203}, "npu_s1", 25.0, 1.5),
+        (ResourceType.NPU, {40: 0.232, 160: 0.140}, "npu_s0", 0.0, 0.0),
+        (ResourceType.NPU, {40: 0.392, 160: 0.203}, "npu_s1", 0.0, 0.0),
         (ResourceType.DSP, {80: 1.700}, "dsp_s1", 0.0, 0.0),
         (ResourceType.NPU, {40:6.438, 160: 2.988}, "npu_s2", 180.0, 10.0),
         (ResourceType.DSP, {80: 1.700}, "dsp_s2", 0.0, 0.0),
-        (ResourceType.NPU, {40: 0.392, 160: 0.203}, "npu_s3", 25.0, 1.5),
+        (ResourceType.NPU, {40: 0.392, 160: 0.203}, "npu_s3", 53.42, 29.352),
         (ResourceType.DSP, {80: 1.700}, "dsp_s3", 0.0, 0.0),
-        (ResourceType.NPU, {40: 0.176, 160: 0.068}, "npu_s4", 12.0, 0.8),
+        (ResourceType.NPU, {40: 0.176, 160: 0.068}, "npu_s4", 0.0, 0.0),
     ]
     
     for resource_type, duration_table, segment_id, power, ddr in segment_configs:
@@ -542,8 +542,8 @@ def create_PD_dns() -> List[ResourceSegment]:
             duration_table={160: 0.593}, # no 40Gbps perf
             start_time=0,
             segment_id="main",
-            power=50.0,  # 50mW per frame
-            ddr=3.0  # 3MB per frame
+            power=8.21,
+            ddr=0.772
         )
     ]
     return segments
@@ -556,8 +556,8 @@ def create_NN_tone() -> List[ResourceSegment]:
             duration_table={40: 3.496, 160: 2.15}, # no 40Gbps perf
             start_time=0,
             segment_id="main",
-            power=140.0,  # 140mW per frame
-            ddr=8.0  # 8MB per frame
+            power=41.46,
+            ddr=9.546
         )
     ]
     return segments

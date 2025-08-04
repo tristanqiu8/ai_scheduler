@@ -219,6 +219,11 @@ class PriorityOptimizer:
         
         print(f"[SEGMENT ANALYSIS] Total segment executions: {total_segment_executions}")
         
+        # 打印网络详细信息
+        print(f"\n[NETWORK DETAILS] Individual task power and DDR analysis:")
+        print(f"{'Task ID':<8} {'Task Name':<15} {'FPS':<6} {'Segments':<10} {'Power/Frame':<12} {'DDR/Frame':<12} {'Total Power':<12} {'Total DDR':<12}")
+        print("-" * 100)
+        
         # 计算总功耗和DDR带宽
         total_power = 0.0  # mW
         total_ddr = 0.0  # MB
@@ -231,6 +236,17 @@ class PriorityOptimizer:
             
             # 获取该任务在1秒内的执行帧数
             frames_per_second = task_metrics.achieved_fps
+            
+            # 计算该任务的功耗和DDR
+            task_power_per_frame = sum(segment.power for segment in task.segments)
+            task_ddr_per_frame = sum(segment.ddr for segment in task.segments)
+            task_total_power = task_power_per_frame * frames_per_second
+            task_total_ddr = task_ddr_per_frame * frames_per_second
+            
+            # 打印任务详情
+            print(f"{task_id:<8} {task.name:<15} {frames_per_second:<6.1f} {len(task.segments):<10} "
+                  f"{task_power_per_frame:<12.2f} {task_ddr_per_frame:<12.2f} "
+                  f"{task_total_power:<12.2f} {task_total_ddr:<12.2f}")
             
             # 累加每个segment的功耗和DDR
             for segment in task.segments:
