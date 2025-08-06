@@ -334,7 +334,7 @@ def create_ml10t() -> List[ResourceSegment]:  # from vision
     """ML 10T Base Framne: 纯NPU (base 52.86ms)"""
     return [ResourceSegment(
         resource_type=ResourceType.NPU,
-        duration_table={40: 58.78, 160: 52.86}, # 40 multiple is from 1.112
+        duration_table={40: 52.86, 160: 52.86}, # 40 multiple is from 1.112
         start_time=0,
         segment_id="main",
         power=800.0,  # 800mW per frame
@@ -345,7 +345,7 @@ def create_ml10t_075() -> List[ResourceSegment]:  # first 75% discount
     """ML 10T Big Framne: 纯NPU"""
     return [ResourceSegment(
         resource_type=ResourceType.NPU,
-        duration_table={40: 44.085, 160: 39.645},
+        duration_table={40: 39.645, 160: 39.645},
         start_time=0,
         segment_id="main",
         power=600.0,  # 600mW per frame
@@ -356,7 +356,7 @@ def create_ml10t_bigmid() -> List[ResourceSegment]:
     """ML 10T BigMid Framne: 纯NPU"""
     return [ResourceSegment(
         resource_type=ResourceType.NPU,
-        duration_table={40: 33.06, 160: 29.73},
+        duration_table={40: 29.73, 160: 29.73},
         start_time=0,
         segment_id="main",
         power=450.0,  # 450mW per frame
@@ -367,7 +367,7 @@ def create_ml10t_midsmall() -> List[ResourceSegment]:
     """ML 10T MidSmall Framne: 纯NPU"""
     return [ResourceSegment(
         resource_type=ResourceType.NPU,
-        duration_table={40: 16.535, 160: 14.87},
+        duration_table={40: 14.87, 160: 14.87},
         start_time=0,
         segment_id="main",
         power=300.0,  # 300mW per frame
