@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
-自动化优先级配置优化器 - 2NPU+1DSP硬件配置
+自动化优先级配置优化器
 通过迭代调整任务优先级，直到满足所有任务的FPS和延迟要求
-扩展硬件资源为2个NPU和1个DSP
 """
-
+import pytest
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -13,10 +12,11 @@ from NNScheduler.core.resource_queue import ResourceQueueManager
 from NNScheduler.core.schedule_tracer import ScheduleTracer
 from NNScheduler.core.launcher import TaskLauncher
 from NNScheduler.core.enhanced_launcher import EnhancedTaskLauncher
-from NNScheduler.core.executor import ScheduleExecutor, set_execution_log_enabled
+from NNScheduler.core.executor import ScheduleExecutor
 from NNScheduler.core.enums import ResourceType, TaskPriority, SegmentationStrategy
 from NNScheduler.core.evaluator import PerformanceEvaluator
-from NNScheduler.scenario.camera_task_2npu1dsp import create_real_tasks_2npu1dsp
+from NNScheduler.scenario.hybrid_task import create_real_tasks
+from NNScheduler.viz.schedule_visualizer import ScheduleVisualizer
 import numpy as np
 import random
 import time
@@ -38,8 +38,8 @@ class OptimizationResult:
     resource_utilization: Dict[str, float]
 
 
-class PriorityOptimizer2NPU1DSP:
-    """任务优先级自动优化器 - 2NPU+1DSP配置"""
+class PriorityOptimizer:
+    """任务优先级自动优化器"""
     
     def __init__(self, tasks, time_window=1000.0, segment_mode=True):
         self.tasks = tasks
@@ -91,7 +91,7 @@ class PriorityOptimizer2NPU1DSP:
     def _calculate_latency_strictness(self, task) -> float:
         """计算延迟严格度"""
         # 估算任务在40GB/s带宽下的执行时间
-        bandwidth_map = {ResourceType.NPU: 160.0, ResourceType.DSP: 160.0}
+        bandwidth_map = {ResourceType.NPU: 40.0, ResourceType.DSP: 40.0}
         estimated_duration = task.estimate_duration(bandwidth_map)
         
         # 延迟要求与执行时间的比例，越小越严格
@@ -165,16 +165,15 @@ class PriorityOptimizer2NPU1DSP:
                   f"{features['latency_requirement']:<12.1f}")
     
     def evaluate_configuration(self, priority_config: Dict[str, TaskPriority]) -> OptimizationResult:
-        """评估一个优先级配置 - 使用2NPU+1DSP硬件配置"""
+        """评估一个优先级配置"""
         # 应用优先级配置
         for task in self.tasks:
             task.priority = priority_config[task.task_id]
         
-        # 创建资源和调度器 - 2NPU+1DSP配置
+        # 创建资源和调度器
         queue_manager = ResourceQueueManager()
-        queue_manager.add_resource("NPU_0", ResourceType.NPU, 160.0)
-        queue_manager.add_resource("NPU_1", ResourceType.NPU, 160.0)  # 第二个NPU
-        queue_manager.add_resource("DSP_0", ResourceType.DSP, 160.0)
+        queue_manager.add_resource("NPU_0", ResourceType.NPU, 40.0)
+        queue_manager.add_resource("DSP_0", ResourceType.DSP, 40.0)
         
         tracer = ScheduleTracer(queue_manager)
         
@@ -201,36 +200,14 @@ class PriorityOptimizer2NPU1DSP:
         latency_satisfaction = {}
         total_satisfied = 0
         
-        # 计算帧率总和
-        total_fps = 0.0
         for task_id, task_metrics in evaluator.task_metrics.items():
             fps_satisfaction[task_id] = task_metrics.fps_satisfaction
             latency_satisfaction[task_id] = task_metrics.latency_satisfaction_rate > 0.9
-            total_fps += task_metrics.achieved_fps
             
             if fps_satisfaction[task_id] and latency_satisfaction[task_id]:
                 total_satisfied += 1
         
-        # 打印一秒内所有任务的帧率总和
-        print(f"\n[FPS ANALYSIS] Total FPS in 1 second: {total_fps:.2f} FPS")
-        
-        # 计算所有字段(段)的调用总和
-        total_segment_executions = 0
-        for resource_metrics in evaluator.resource_metrics.values():
-            total_segment_executions += resource_metrics.segment_executions
-        
-        print(f"[SEGMENT ANALYSIS] Total segment executions: {total_segment_executions}")
-        
         satisfaction_rate = total_satisfied / len(evaluator.task_metrics)
-        
-        # 计算2个NPU和1个DSP的平均利用率
-        npu0_util = evaluator.resource_metrics.get("NPU_0")
-        npu1_util = evaluator.resource_metrics.get("NPU_1") 
-        dsp0_util = evaluator.resource_metrics.get("DSP_0")
-        
-        npu_utilization = ((npu0_util.utilization_rate if npu0_util else 0.0) + 
-                          (npu1_util.utilization_rate if npu1_util else 0.0)) / 2
-        dsp_utilization = dsp0_util.utilization_rate if dsp0_util else 0.0
         
         return OptimizationResult(
             iteration=len(self.optimization_history),
@@ -240,8 +217,8 @@ class PriorityOptimizer2NPU1DSP:
             total_satisfaction_rate=satisfaction_rate,
             avg_latency=metrics.avg_latency,
             resource_utilization={
-                'NPU_avg': npu_utilization,
-                'DSP': dsp_utilization
+                'NPU': metrics.avg_npu_utilization,
+                'DSP': metrics.avg_dsp_utilization
             }
         )
     
@@ -298,11 +275,10 @@ class PriorityOptimizer2NPU1DSP:
     
     def optimize(self, max_iterations=50, max_time_seconds=300, target_satisfaction=1.0):
         """执行优化过程"""
-        print(f"\n[DEMO] 开始自动优先级优化 - 2NPU+1DSP硬件配置")
+        print(f"\n[DEMO] 开始自动优先级优化")
         print(f"  最大迭代次数: {max_iterations}")
         print(f"  最大运行时间: {max_time_seconds}秒")
         print(f"  目标满足率: {target_satisfaction*100}%")
-        print(f"  硬件配置: 2个NPU + 1个DSP")
         
         start_time = time.time()
         
@@ -326,7 +302,7 @@ class PriorityOptimizer2NPU1DSP:
             # 打印进度
             print(f"  满足率: {result.total_satisfaction_rate:.1%}")
             print(f"  平均延迟: {result.avg_latency:.1f}ms")
-            print(f"  资源利用率: NPU平均={result.resource_utilization['NPU_avg']:.1f}%, "
+            print(f"  资源利用率: NPU={result.resource_utilization['NPU']:.1f}%, "
                   f"DSP={result.resource_utilization['DSP']:.1f}%")
             
             # 更新最佳结果
@@ -337,14 +313,14 @@ class PriorityOptimizer2NPU1DSP:
             
             # 检查是否达到目标
             if result.total_satisfaction_rate >= target_satisfaction:
-                print(f"\n[SUCCESS] 达到目标满足率！")
+                print(f"\n🎉 达到目标满足率！")
                 break
             
             # 调整优先级
             current_config = self.adjust_priorities(current_config, result)
             iteration += 1
         
-        print(f"\n[COMPLETE] 优化完成！共迭代 {iteration + 1} 次，耗时 {time.time() - start_time:.1f}秒")
+        print(f"\n✅ 优化完成！共迭代 {iteration + 1} 次，耗时 {time.time() - start_time:.1f}秒")
         
         return best_config, best_result
     
@@ -352,7 +328,7 @@ class PriorityOptimizer2NPU1DSP:
                                  best_result: OptimizationResult):
         """打印优化结果摘要"""
         print("\n" + "=" * 100)
-        print("[ANALYSIS] 优化结果摘要 - 2NPU+1DSP硬件配置")
+        print("[ANALYSIS] 优化结果摘要")
         print("=" * 100)
         
         print(f"\n最佳配置（满足率: {best_result.total_satisfaction_rate:.1%}）:")
@@ -370,14 +346,14 @@ class PriorityOptimizer2NPU1DSP:
         
         # 打印优化历史
         print(f"\n优化历史（共{len(self.optimization_history)}次迭代）:")
-        print("-" * 80)
-        print(f"{'迭代':<6} {'满足率':<10} {'平均延迟':<12} {'NPU平均':<12} {'DSP利用率':<12}")
-        print("-" * 80)
+        print("-" * 60)
+        print(f"{'迭代':<6} {'满足率':<10} {'平均延迟':<12} {'NPU利用率':<12} {'DSP利用率':<12}")
+        print("-" * 60)
         
         for i, result in enumerate(self.optimization_history[-10:]):  # 只显示最后10次
             print(f"{i+1:<6} {result.total_satisfaction_rate:<10.1%} "
                   f"{result.avg_latency:<12.1f} "
-                  f"{result.resource_utilization['NPU_avg']:<12.1f} "
+                  f"{result.resource_utilization['NPU']:<12.1f} "
                   f"{result.resource_utilization['DSP']:<12.1f}")
         
         # 保存最佳配置
@@ -388,7 +364,6 @@ class PriorityOptimizer2NPU1DSP:
         """保存最佳配置到文件"""
         output = {
             'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-            'hardware_config': '2NPU+1DSP',
             'satisfaction_rate': result.total_satisfaction_rate,
             'avg_latency': result.avg_latency,
             'resource_utilization': result.resource_utilization,
@@ -397,27 +372,24 @@ class PriorityOptimizer2NPU1DSP:
             'latency_satisfaction': result.latency_satisfaction
         }
         
-        filename = f"optimized_priority_config_2npu1dsp_{time.strftime('%Y%m%d_%H%M%S')}.json"
+        filename = f"optimized_priority_config_{time.strftime('%Y%m%d_%H%M%S')}.json"
         with open(filename, 'w') as f:
             json.dump(output, f, indent=2)
         
-        print(f"\n[SAVED] 最佳配置已保存到: {filename}")
+        print(f"\n💾 最佳配置已保存到: {filename}")
 
 
 def main():
     """主函数"""
     print("=" * 100)
-    print("自动化优先级配置优化 - 2NPU+1DSP硬件配置")
+    print("自动化优先级配置优化")
     print("=" * 100)
     
-    # 关闭执行日志输出
-    set_execution_log_enabled(False)
-    
-    # 创建2NPU+1DSP专用任务
-    tasks = create_real_tasks_2npu1dsp()
+    # 创建任务
+    tasks = create_real_tasks()
     
     # 创建优化器
-    optimizer = PriorityOptimizer2NPU1DSP(tasks, time_window=1000.0, segment_mode=True)
+    optimizer = PriorityOptimizer(tasks, time_window=1000.0, segment_mode=True)
     
     # 执行优化
     best_config, best_result = optimizer.optimize(
@@ -429,45 +401,22 @@ def main():
     # 打印结果
     optimizer.print_optimization_summary(best_config, best_result)
     
-    # 使用最佳配置生成Chrome Tracing文件
-    print("\n\n[DETAIL] 生成Chrome Tracing可视化文件...")
+    # 可选：使用最佳配置运行详细分析
+    print("\n\n[DETAIL] 使用最佳配置运行详细分析...")
     
-    # 重新创建任务以应用最佳配置
-    final_tasks = create_real_tasks_2npu1dsp()
-    for task in final_tasks:
+    # 应用最佳配置
+    for task in tasks:
         task.priority = best_config[task.task_id]
     
-    # 创建资源和调度器 - 2NPU+1DSP配置
-    queue_manager_final = ResourceQueueManager()
-    queue_manager_final.add_resource("NPU_0", ResourceType.NPU, 160.0)
-    queue_manager_final.add_resource("NPU_1", ResourceType.NPU, 160.0)  # 第二个NPU
-    queue_manager_final.add_resource("DSP_0", ResourceType.DSP, 160.0)
-    
-    tracer_final = ScheduleTracer(queue_manager_final)
-    launcher_final = EnhancedTaskLauncher(queue_manager_final, tracer_final)
-    
-    # 注册任务
-    for task in final_tasks:
-        launcher_final.register_task(task)
-    
-    # 创建并执行计划
-    plan_final = launcher_final.create_launch_plan(1000.0, "balanced")
-    executor_final = ScheduleExecutor(queue_manager_final, tracer_final, launcher_final.tasks)
-    stats_final = executor_final.execute_plan(plan_final, 1000.0, segment_mode=True)
-    
-    # 生成Chrome Tracing文件
-    from NNScheduler.viz.schedule_visualizer import ScheduleVisualizer
-    visualizer = ScheduleVisualizer(tracer_final)
-    
-    chrome_trace_filename = f"optimized_schedule_2npu1dsp_chrome_trace_{time.strftime('%Y%m%d_%H%M%S')}.json"
-    visualizer.export_chrome_tracing(chrome_trace_filename)
-    print(f"\n[SUCCESS] Chrome Tracing文件已生成: {chrome_trace_filename}")
-    print("[TIP] 在Chrome浏览器中访问 chrome://tracing 并加载此JSON文件查看详细时间线")
-    
-    # 同时生成PNG图片
-    png_filename = f"optimized_schedule_2npu1dsp_timeline_{time.strftime('%Y%m%d_%H%M%S')}.png"
-    visualizer.plot_resource_timeline(png_filename)
-    print(f"[SUCCESS] 时间线图片已生成: {png_filename}")
+    # 运行详细测试
+    from demo_hybrid_task import test_scheduling_modes, analyze_latency_performance
+    results = test_scheduling_modes(1000.0)
+    analyze_latency_performance(results)
+
+
+def test_auto_priority_optimization():
+    """pytest测试函数"""
+    main()
 
 
 if __name__ == "__main__":

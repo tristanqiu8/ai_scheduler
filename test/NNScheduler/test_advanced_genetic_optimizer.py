@@ -3,6 +3,7 @@
 高级遗传算法优化器 - 不仅优化发射时间，还优化任务优先级和分段策略
 """
 
+import pytest
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

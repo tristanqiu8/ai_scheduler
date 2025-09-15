@@ -4,6 +4,7 @@
 每个资源有固定的带宽限制，从头到尾保持不变
 """
 
+import pytest
 import sys
 import os
 # 添加项目根目录到Python路径
@@ -164,8 +165,8 @@ def demonstrate_bandwidth_impact():
 if __name__ == "__main__":
     # 测试静态带宽执行
     test_static_bandwidth_execution()
-    
+
     # 演示带宽影响
     demonstrate_bandwidth_impact()
-    
+
     print("\n[OK] 静态带宽方案演示完成！")

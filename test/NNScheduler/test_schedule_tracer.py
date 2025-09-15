@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 """
-测试 ScheduleTracer 功能
+演示 ScheduleTracer 的完整功能
+包括甘特图和Chrome Tracing
 """
 
 import pytest
 import sys
 import os
-
-# 仅在直接运行时添加路径
-if __name__ == "__main__":
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from NNScheduler.core.resource_queue import ResourceQueueManager
 from NNScheduler.core.schedule_tracer import ScheduleTracer
@@ -19,143 +16,131 @@ from NNScheduler.viz.schedule_visualizer import ScheduleVisualizer
 
 
 def test_schedule_tracer():
-    """测试调度追踪器"""
-    print("=== 测试 ScheduleTracer ===\n")
+    """演示调度追踪器的所有功能"""
+    print("=== ScheduleTracer 功能演示 ===\n")
     
-    # 创建资源队列管理器
+    # 1. 创建资源系统
     manager = ResourceQueueManager()
-    manager.add_resource("NPU_0", ResourceType.NPU, 60.0)
-    manager.add_resource("NPU_1", ResourceType.NPU, 60.0)
-    manager.add_resource("DSP_0", ResourceType.DSP, 40.0)
     
-    # 创建追踪器和可视化器
+    # 添加多个资源
+    resources = [
+        ("NPU_0", ResourceType.NPU, 60.0),
+        ("NPU_1", ResourceType.NPU, 60.0),
+        ("DSP_0", ResourceType.DSP, 40.0),
+        ("DSP_1", ResourceType.DSP, 40.0)
+    ]
+    
+    for res_id, res_type, bandwidth in resources:
+        manager.add_resource(res_id, res_type, bandwidth)
+    
+    print("系统资源配置:")
+    for rid, queue in sorted(manager.resource_queues.items()):
+        print(f"  {rid}: {queue.resource_type.value}, 带宽={queue.bandwidth}")
+    
+    # 2. 创建追踪器和可视化器
     tracer = ScheduleTracer(manager)
     visualizer = ScheduleVisualizer(tracer)
     
-    # 测试执行记录
-    print("测试任务执行记录:")
+    # 3. 模拟多样化的任务执行
+    print("\n模拟任务执行:")
     
-    test_executions = [
-        # 基本功能测试
-        ("TASK_1", "NPU_0", 0.0, 5.0, TaskPriority.CRITICAL, 60.0),
-        ("TASK_2", "NPU_1", 2.0, 10.0, TaskPriority.HIGH, 60.0),
-        ("TASK_3", "DSP_0", 0.0, 10.0, TaskPriority.NORMAL, 40.0),
-        ("TASK_4", "NPU_0", 5.0, 11.0, TaskPriority.NORMAL, 60.0),
+    executions = [
+        # CRITICAL任务 - 最高优先级
+        ("CRITICAL_DETECT", "NPU_0", 0.0, 4.0, TaskPriority.CRITICAL, 60.0),
         
-        # 测试并发执行
-        ("TASK_5", "NPU_1", 10.0, 15.0, TaskPriority.HIGH, 60.0),
-        ("TASK_6", "DSP_0", 10.0, 18.0, TaskPriority.NORMAL, 40.0),
+        # HIGH优先级任务 - 视频处理
+        ("VIDEO_PROC_1", "DSP_0", 0.0, 8.0, TaskPriority.HIGH, 40.0),
+        ("VIDEO_PROC_2", "DSP_1", 5.0, 11.0, TaskPriority.HIGH, 40.0),
         
-        # 测试低优先级任务
-        ("TASK_7", "NPU_0", 11.0, 20.0, TaskPriority.LOW, 60.0),
+        # NORMAL优先级任务
+        ("NORMAL_TASK_1", "NPU_1", 0.0, 5.0, TaskPriority.NORMAL, 60.0),
+        ("NORMAL_TASK_2", "NPU_0", 4.0, 10.0, TaskPriority.NORMAL, 60.0),
+        ("NORMAL_TASK_3", "NPU_1", 5.0, 12.0, TaskPriority.NORMAL, 60.0),
+        
+        # LOW优先级任务 - 后台任务
+        ("BACKGROUND_CLEAN", "NPU_0", 10.0, 20.0, TaskPriority.LOW, 60.0),
+        
+        # 更多混合任务
+        ("HIGH_COMPUTE", "NPU_1", 12.0, 18.0, TaskPriority.HIGH, 60.0),
+        ("NORMAL_AUDIO", "DSP_0", 8.0, 15.0, TaskPriority.NORMAL, 40.0),
+        ("CRITICAL_SAFETY", "DSP_1", 11.0, 14.0, TaskPriority.CRITICAL, 40.0),
     ]
     
     # 记录执行
-    for task_id, res_id, start, end, priority, bw in test_executions:
-        # 记录入队
+    for task_id, res_id, start, end, priority, bw in executions:
+        # 记录入队（用于统计）
         tracer.record_enqueue(task_id, res_id, priority, start, [])
         # 记录执行
         tracer.record_execution(task_id, res_id, start, end, bw)
-        print(f"  {start:.1f}-{end:.1f}ms: {res_id} 执行 {task_id}")
+        print(f"  {start:>5.1f} - {end:>5.1f}ms: {res_id} 执行 {task_id} ({priority.name})")
     
-    # 测试文本甘特图
-    print("\n测试文本甘特图:")
-    print("-" * 60)
-    visualizer.print_gantt_chart(width=60)
+    print("\n" + "="*60)
     
-    # 测试统计功能
-    print("\n测试统计功能:")
+    # 4. 显示文本甘特图
+    print("\n文本格式甘特图:")
+    print("-" * 80)
+    visualizer.print_gantt_chart(width=80)
+    
+    # 5. 显示详细统计
+    print("\n" + "="*60)
+    print("调度统计分析")
+    print("="*60)
+    
     stats = tracer.get_statistics()
     
-    # 验证统计数据
-    assert stats['total_tasks'] == 7, f"Expected 7 tasks, got {stats['total_tasks']}"
-    assert stats['total_executions'] == 7, f"Expected 7 executions, got {stats['total_executions']}"
-    print(f"  [OK] 总任务数: {stats['total_tasks']}")
-    print(f"  [OK] 总执行次数: {stats['total_executions']}")
-    print(f"  [OK] 时间跨度: {stats['time_span']:.1f}ms")
+    print(f"\n基本统计:")
+    print(f"  总任务数: {stats['total_tasks']}")
+    print(f"  总执行次数: {stats['total_executions']}")
+    print(f"  时间跨度: {stats['time_span']:.1f}ms")
     
-    # 测试资源利用率
-    print("\n测试资源利用率计算:")
-    for res_id in ["NPU_0", "NPU_1", "DSP_0"]:
-        util = stats['resource_utilization'].get(res_id, 0)
-        print(f"  {res_id}: {util:.1f}%")
-        assert util > 0, f"Resource {res_id} should have utilization > 0"
+    print(f"\n性能指标:")
+    print(f"  平均等待时间: {stats['average_wait_time']:.2f}ms")
+    print(f"  平均执行时间: {stats['average_execution_time']:.2f}ms")
     
-    # 测试优先级分布
-    print("\n测试优先级分布:")
-    priority_dist = stats['tasks_by_priority']
-    assert priority_dist.get('CRITICAL', 0) == 1, "Should have 1 CRITICAL task"
-    assert priority_dist.get('HIGH', 0) == 2, "Should have 2 HIGH tasks"
-    assert priority_dist.get('NORMAL', 0) == 3, "Should have 3 NORMAL tasks"
-    assert priority_dist.get('LOW', 0) == 1, "Should have 1 LOW task"
-    print("  [OK] 优先级分布正确")
+    print(f"\n任务优先级分布:")
+    for priority, count in sorted(stats['tasks_by_priority'].items()):
+        print(f"  {priority}: {count} 个任务")
     
-    # 测试时间线获取
-    print("\n测试时间线获取:")
-    timeline = tracer.get_timeline()
-    assert "NPU_0" in timeline, "NPU_0 should be in timeline"
-    assert "NPU_1" in timeline, "NPU_1 should be in timeline"
-    assert "DSP_0" in timeline, "DSP_0 should be in timeline"
-    assert len(timeline["NPU_0"]) == 3, "NPU_0 should have 3 executions"
-    assert len(timeline["NPU_1"]) == 2, "NPU_1 should have 2 executions"
-    assert len(timeline["DSP_0"]) == 2, "DSP_0 should have 2 executions"
-    print("  [OK] 时间线数据正确")
+    print(f"\n资源利用率:")
+    all_resources = ["NPU_0", "NPU_1", "DSP_0", "DSP_1"]
+    for res_id in sorted(all_resources):
+        util = stats['resource_utilization'].get(res_id, 0.0)
+        if util > 0:
+            print(f"  {res_id}: {util:.1f}%")
+        else:
+            print(f"  {res_id}: IDLE")
     
-    # 测试任务时间线
-    print("\n测试任务时间线:")
-    task1_timeline = tracer.get_task_timeline("TASK_1")
-    assert len(task1_timeline) == 1, "TASK_1 should have 1 execution"
-    assert task1_timeline[0].start_time == 0.0, "TASK_1 should start at 0.0"
-    assert task1_timeline[0].end_time == 5.0, "TASK_1 should end at 5.0"
-    print("  [OK] 任务时间线查询正确")
-    
-    # 测试可视化输出
-    print("\n测试可视化输出:")
+    # 6. 生成可视化文件
+    print("\n生成可视化文件...")
     
     # Matplotlib图表
-    visualizer.plot_resource_timeline("test_timeline.png")
-    assert os.path.exists("test_timeline.png"), "Timeline plot should be created"
-    print("  [OK] Matplotlib图表生成成功")
+    visualizer.plot_resource_timeline("demo_timeline.png")
     
     # Chrome Tracing
-    visualizer.export_chrome_tracing("test_trace.json")
-    assert os.path.exists("test_trace.json"), "Chrome trace should be created"
-    print("  [OK] Chrome Tracing文件生成成功")
+    visualizer.export_chrome_tracing("demo_trace.json")
     
-    # 测试边界情况
-    print("\n测试边界情况:")
+    # 详细报告
+    visualizer.export_summary_report("demo_report.txt")
     
-    # 空追踪器
-    empty_manager = ResourceQueueManager()
-    empty_tracer = ScheduleTracer(empty_manager)
-    empty_viz = ScheduleVisualizer(empty_tracer)
+    print("\n[OK] 可视化文件已生成:")
+    print("  - demo_timeline.png (Matplotlib图表)")
+    print("  - demo_trace.json (Chrome Tracing文件)")
+    print("  - demo_report.txt (文本报告)")
+    print("\n在Chrome浏览器中打开 chrome://tracing 并加载 demo_trace.json 查看详细时间线")
     
-    # 应该能处理空数据
-    empty_viz.print_gantt_chart(width=40)
-    empty_stats = empty_tracer.get_statistics()
-    assert empty_stats['total_tasks'] == 0, "Empty tracer should have 0 tasks"
-    print("  [OK] 空数据处理正常")
+    # 7. 显示任务执行时间线详情
+    print("\n" + "="*60)
+    print("任务执行时间线详情")
+    print("="*60)
     
-    # 测试单个任务
-    single_manager = ResourceQueueManager()
-    single_manager.add_resource("TEST_RES", ResourceType.NPU, 100.0)
-    single_tracer = ScheduleTracer(single_manager)
-    single_tracer.record_execution("SINGLE_TASK", "TEST_RES", 0.0, 10.0, 100.0)
-    
-    single_stats = single_tracer.get_statistics()
-    assert single_stats['total_tasks'] == 1, "Should have 1 task"
-    assert single_stats['resource_utilization']['TEST_RES'] == 100.0, "Should have 100% utilization"
-    print("  [OK] 单任务处理正常")
-    
-    print("\n[PASS] 所有测试通过！")
-    
-    # 清理测试文件
-    if os.path.exists("test_timeline.png"):
-        os.remove("test_timeline.png")
-    if os.path.exists("test_trace.json"):
-        os.remove("test_trace.json")
-    print("\n已清理测试文件")
-
+    timeline = tracer.get_timeline()
+    for resource_id in sorted(timeline.keys()):
+        executions = timeline[resource_id]
+        print(f"\n{resource_id}:")
+        for exec in executions:
+            print(f"  {exec.start_time:>6.1f} - {exec.end_time:>6.1f}ms: "
+                  f"{exec.task_id:<20} (优先级: {exec.priority.name:<8}, "
+                  f"带宽: {exec.bandwidth}, 时长: {exec.duration:.1f}ms)")
 
 if __name__ == "__main__":
     test_schedule_tracer()

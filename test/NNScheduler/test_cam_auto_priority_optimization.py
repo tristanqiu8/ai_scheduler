@@ -4,6 +4,7 @@
 通过迭代调整任务优先级，直到满足所有任务的FPS和延迟要求
 """
 
+import pytest
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -12,11 +13,10 @@ from NNScheduler.core.resource_queue import ResourceQueueManager
 from NNScheduler.core.schedule_tracer import ScheduleTracer
 from NNScheduler.core.launcher import TaskLauncher
 from NNScheduler.core.enhanced_launcher import EnhancedTaskLauncher
-from NNScheduler.core.executor import ScheduleExecutor
+from NNScheduler.core.executor import ScheduleExecutor, set_execution_log_enabled
 from NNScheduler.core.enums import ResourceType, TaskPriority, SegmentationStrategy
 from NNScheduler.core.evaluator import PerformanceEvaluator
-from NNScheduler.scenario.hybrid_task import create_real_tasks
-from NNScheduler.viz.schedule_visualizer import ScheduleVisualizer
+from NNScheduler.scenario.camera_task import create_real_tasks
 import numpy as np
 import random
 import time
@@ -91,7 +91,7 @@ class PriorityOptimizer:
     def _calculate_latency_strictness(self, task) -> float:
         """计算延迟严格度"""
         # 估算任务在40GB/s带宽下的执行时间
-        bandwidth_map = {ResourceType.NPU: 40.0, ResourceType.DSP: 40.0}
+        bandwidth_map = {ResourceType.NPU: 160.0, ResourceType.DSP: 160.0}
         estimated_duration = task.estimate_duration(bandwidth_map)
         
         # 延迟要求与执行时间的比例，越小越严格
@@ -172,8 +172,8 @@ class PriorityOptimizer:
         
         # 创建资源和调度器
         queue_manager = ResourceQueueManager()
-        queue_manager.add_resource("NPU_0", ResourceType.NPU, 40.0)
-        queue_manager.add_resource("DSP_0", ResourceType.DSP, 40.0)
+        queue_manager.add_resource("NPU_0", ResourceType.NPU, 160.0)
+        queue_manager.add_resource("DSP_0", ResourceType.DSP, 160.0)
         
         tracer = ScheduleTracer(queue_manager)
         
@@ -200,12 +200,78 @@ class PriorityOptimizer:
         latency_satisfaction = {}
         total_satisfied = 0
         
+        # 计算帧率总和
+        total_fps = 0.0
         for task_id, task_metrics in evaluator.task_metrics.items():
             fps_satisfaction[task_id] = task_metrics.fps_satisfaction
             latency_satisfaction[task_id] = task_metrics.latency_satisfaction_rate > 0.9
+            total_fps += task_metrics.achieved_fps
             
             if fps_satisfaction[task_id] and latency_satisfaction[task_id]:
                 total_satisfied += 1
+        
+        # 打印一秒内所有任务的帧率总和
+        print(f"\n[FPS ANALYSIS] Total FPS in 1 second: {total_fps:.2f} FPS")
+        
+        # 计算所有字段(段)的调用总和
+        total_segment_executions = 0
+        for resource_metrics in evaluator.resource_metrics.values():
+            total_segment_executions += resource_metrics.segment_executions
+        
+        print(f"[SEGMENT ANALYSIS] Total segment executions: {total_segment_executions}")
+        
+        # 打印网络详细信息
+        print(f"\n[NETWORK DETAILS] Individual task power and DDR analysis:")
+        print(f"{'Task ID':<8} {'Task Name':<15} {'FPS':<6} {'Segments':<10} {'Power/Frame':<12} {'DDR/Frame':<12} {'Total Power':<12} {'Total DDR':<12}")
+        print("-" * 100)
+        
+        # 计算总功耗和DDR带宽
+        total_power = 0.0  # mW
+        total_ddr = 0.0  # MB
+        
+        # 遍历每个任务的执行情况
+        for task_id, task_metrics in evaluator.task_metrics.items():
+            task = next((t for t in self.tasks if t.task_id == task_id), None)
+            if not task:
+                continue
+            
+            # 获取该任务在1秒内的执行帧数
+            frames_per_second = task_metrics.achieved_fps
+            
+            # 计算该任务的功耗和DDR
+            task_power_per_frame = sum(segment.power for segment in task.segments)
+            task_ddr_per_frame = sum(segment.ddr for segment in task.segments)
+            task_total_power = task_power_per_frame * frames_per_second
+            task_total_ddr = task_ddr_per_frame * frames_per_second
+            
+            # 打印任务详情
+            print(f"{task_id:<8} {task.name:<15} {frames_per_second:<6.1f} {len(task.segments):<10} "
+                  f"{task_power_per_frame:<12.2f} {task_ddr_per_frame:<12.2f} "
+                  f"{task_total_power:<12.2f} {task_total_ddr:<12.2f}")
+            
+            # 累加每个segment的功耗和DDR
+            for segment in task.segments:
+                # 每帧的功耗和DDR乘以FPS得到每秒的总量
+                total_power += segment.power * frames_per_second
+                total_ddr += segment.ddr * frames_per_second
+        
+        # 转换单位：mW转W，MB转GB
+        total_power_w = total_power / 1000.0
+        total_ddr_gb = total_ddr / 1024.0
+        
+        print(f"[POWER ANALYSIS] Total dynamic power consumption: {total_power:.2f} mW ({total_power_w:.3f} W)")
+        print(f"[DDR ANALYSIS] Total DDR bandwidth consumption: {total_ddr:.2f} MB/s ({total_ddr_gb:.3f} GB/s)")
+        
+        # 计算System利用率（DSP或NPU忙碌的时间）
+        npu_utilization = metrics.avg_npu_utilization / 100.0  # 转换为小数
+        dsp_utilization = metrics.avg_dsp_utilization / 100.0  # 转换为小数
+        
+        # System利用率 = 1 - (1 - NPU利用率) * (1 - DSP利用率)
+        # 即至少有一个资源在工作的时间比例
+        system_idle_rate = (1 - npu_utilization) * (1 - dsp_utilization)
+        system_utilization = (1 - system_idle_rate) * 100.0
+        
+        print(f"[SYSTEM ANALYSIS] System utilization (DSP or NPU busy): {system_utilization:.1f}%")
         
         satisfaction_rate = total_satisfied / len(evaluator.task_metrics)
         
@@ -305,6 +371,12 @@ class PriorityOptimizer:
             print(f"  资源利用率: NPU={result.resource_utilization['NPU']:.1f}%, "
                   f"DSP={result.resource_utilization['DSP']:.1f}%")
             
+            # 计算并打印System利用率
+            npu_util = result.resource_utilization['NPU'] / 100.0
+            dsp_util = result.resource_utilization['DSP'] / 100.0
+            system_util = (1 - (1 - npu_util) * (1 - dsp_util)) * 100.0
+            print(f"  System利用率: {system_util:.1f}%")
+            
             # 更新最佳结果
             if best_result is None or result.total_satisfaction_rate > best_result.total_satisfaction_rate:
                 best_result = result
@@ -313,14 +385,14 @@ class PriorityOptimizer:
             
             # 检查是否达到目标
             if result.total_satisfaction_rate >= target_satisfaction:
-                print(f"\n🎉 达到目标满足率！")
+                print(f"\n[SUCCESS] 达到目标满足率！")
                 break
             
             # 调整优先级
             current_config = self.adjust_priorities(current_config, result)
             iteration += 1
         
-        print(f"\n✅ 优化完成！共迭代 {iteration + 1} 次，耗时 {time.time() - start_time:.1f}秒")
+        print(f"\n[COMPLETE] 优化完成！共迭代 {iteration + 1} 次，耗时 {time.time() - start_time:.1f}秒")
         
         return best_config, best_result
     
@@ -346,15 +418,20 @@ class PriorityOptimizer:
         
         # 打印优化历史
         print(f"\n优化历史（共{len(self.optimization_history)}次迭代）:")
-        print("-" * 60)
-        print(f"{'迭代':<6} {'满足率':<10} {'平均延迟':<12} {'NPU利用率':<12} {'DSP利用率':<12}")
-        print("-" * 60)
+        print("-" * 100)
+        print(f"{'迭代':<6} {'满足率':<10} {'平均延迟':<12} {'NPU利用率':<12} {'DSP利用率':<12} {'System利用率':<12}")
+        print("-" * 100)
         
         for i, result in enumerate(self.optimization_history[-10:]):  # 只显示最后10次
+            npu_util = result.resource_utilization['NPU'] / 100.0
+            dsp_util = result.resource_utilization['DSP'] / 100.0
+            system_util = (1 - (1 - npu_util) * (1 - dsp_util)) * 100.0
+            
             print(f"{i+1:<6} {result.total_satisfaction_rate:<10.1%} "
                   f"{result.avg_latency:<12.1f} "
                   f"{result.resource_utilization['NPU']:<12.1f} "
-                  f"{result.resource_utilization['DSP']:<12.1f}")
+                  f"{result.resource_utilization['DSP']:<12.1f} "
+                  f"{system_util:<12.1f}")
         
         # 保存最佳配置
         self.save_best_configuration(best_config, best_result)
@@ -376,14 +453,17 @@ class PriorityOptimizer:
         with open(filename, 'w') as f:
             json.dump(output, f, indent=2)
         
-        print(f"\n💾 最佳配置已保存到: {filename}")
+        print(f"\n[SAVED] 最佳配置已保存到: {filename}")
 
 
-def main():
+def test_cam_auto_priority_optimization():
     """主函数"""
     print("=" * 100)
     print("自动化优先级配置优化")
     print("=" * 100)
+    
+    # 关闭执行日志输出
+    set_execution_log_enabled(False)
     
     # 创建任务
     tasks = create_real_tasks()
@@ -401,18 +481,44 @@ def main():
     # 打印结果
     optimizer.print_optimization_summary(best_config, best_result)
     
-    # 可选：使用最佳配置运行详细分析
-    print("\n\n[DETAIL] 使用最佳配置运行详细分析...")
+    # 使用最佳配置生成Chrome Tracing文件
+    print("\n\n[DETAIL] 生成Chrome Tracing可视化文件...")
     
     # 应用最佳配置
     for task in tasks:
         task.priority = best_config[task.task_id]
     
-    # 运行详细测试
-    from demo_hybrid_task import test_scheduling_modes, analyze_latency_performance
-    results = test_scheduling_modes(1000.0)
-    analyze_latency_performance(results)
+    # 创建资源和调度器
+    queue_manager_final = ResourceQueueManager()
+    queue_manager_final.add_resource("NPU_0", ResourceType.NPU, 160.0)
+    queue_manager_final.add_resource("DSP_0", ResourceType.DSP, 160.0)
+    
+    tracer_final = ScheduleTracer(queue_manager_final)
+    launcher_final = EnhancedTaskLauncher(queue_manager_final, tracer_final)
+    
+    # 注册任务
+    for task in tasks:
+        launcher_final.register_task(task)
+    
+    # 创建并执行计划
+    plan_final = launcher_final.create_launch_plan(1000.0, "balanced")
+    executor_final = ScheduleExecutor(queue_manager_final, tracer_final, launcher_final.tasks)
+    stats_final = executor_final.execute_plan(plan_final, 1000.0, segment_mode=True)
+    
+    # 生成Chrome Tracing文件
+    from NNScheduler.viz.schedule_visualizer import ScheduleVisualizer
+    visualizer = ScheduleVisualizer(tracer_final)
+    
+    chrome_trace_filename = f"optimized_schedule_chrome_trace_{time.strftime('%Y%m%d_%H%M%S')}.json"
+    visualizer.export_chrome_tracing(chrome_trace_filename)
+    print(f"\n[SUCCESS] Chrome Tracing文件已生成: {chrome_trace_filename}")
+    print("[TIP] 在Chrome浏览器中访问 chrome://tracing 并加载此JSON文件查看详细时间线")
+    
+    # 同时生成PNG图片
+    png_filename = f"optimized_schedule_timeline_{time.strftime('%Y%m%d_%H%M%S')}.png"
+    visualizer.plot_resource_timeline(png_filename)
+    print(f"[SUCCESS] 时间线图片已生成: {png_filename}")
 
 
 if __name__ == "__main__":
-    main()
+    test_cam_auto_priority_optimization()

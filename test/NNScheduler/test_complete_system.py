@@ -3,7 +3,7 @@
 完整系统演示 - 展示所有模块的协同工作
 包括：任务发射、执行、评估和优化
 """
-
+import pytest
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -309,11 +309,17 @@ def demo_segment_visualization():
     print("  两种格式都被支持！")
 
 
-if __name__ == "__main__":
+def test_complete_system():
+    """pytest测试函数"""
     # 运行完整系统演示
     demo_complete_system()
-    
+
     # 运行分段标签演示
     demo_segment_visualization()
-    
+
     print("\n\n[COMPLETE] 所有演示完成！")
+
+
+if __name__ == "__main__":
+    test_complete_system()
+

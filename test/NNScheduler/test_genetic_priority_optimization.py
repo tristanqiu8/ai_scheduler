@@ -4,6 +4,7 @@
 使用遗传算法搜索最优的任务优先级配置
 """
 
+import pytest
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -424,7 +425,7 @@ class GeneticPriorityOptimizer:
         print(f"\n💾 优化结果已保存到: {filename}")
 
 
-def compare_with_baseline():
+def test_genetic_priority_optimization():
     """与基准配置对比"""
     print("\n\n" + "=" * 100)
     print("[ANALYSIS] 与原始配置对比")
@@ -465,15 +466,5 @@ def compare_with_baseline():
     optimizer.print_results(best_individual)
 
 
-def main():
-    """主函数"""
-    print("=" * 100)
-    print("遗传算法任务优先级优化")
-    print("=" * 100)
-    
-    # 运行优化并与基准对比
-    compare_with_baseline()
-
-
 if __name__ == "__main__":
-    main()
+    test_genetic_priority_optimization()

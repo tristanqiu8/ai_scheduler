@@ -3,6 +3,7 @@
 优先级提升解决方案 - 直接调整延迟紧张任务的优先级
 """
 
+import pytest
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -159,7 +160,7 @@ def evaluate_optimized_solution(optimized_tasks: List, time_window: float = 1000
     return evaluator, tracer
 
 
-def main():
+def test_priority_boost_solution():
     """主函数"""
     print("=" * 100)
     print("优先级提升解决方案")
@@ -252,4 +253,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    test_priority_boost_solution()

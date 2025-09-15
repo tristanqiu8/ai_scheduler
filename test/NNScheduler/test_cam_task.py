@@ -5,6 +5,7 @@
 重点关注FPS达标和延迟要求
 """
 
+import pytest
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -389,6 +390,11 @@ def main():
     print("1. 段级调度能够显著改善任务延迟，特别是对于有严格延迟要求的任务")
     print("2. 通过更灵活的调度，可以在相同资源下满足更多任务的性能要求")
     print("3. 某些高负载任务可能仍需要额外资源才能完全满足要求")
+
+
+def test_cam_task():
+    """Test function for cam_task scenario"""
+    main()
 
 
 if __name__ == "__main__":

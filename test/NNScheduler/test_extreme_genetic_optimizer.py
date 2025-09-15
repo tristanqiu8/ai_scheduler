@@ -1,11 +1,10 @@
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from matplotlib.patches import Rectangle#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 极致遗传算法优化器 - 专注于最大化200ms窗口末尾的连续空闲时间
 核心策略：尽早完成所有任务，留出最大的末尾空闲时间
 """
 
+import pytest
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -24,6 +23,10 @@ from NNScheduler.core import (
     PerformanceEvaluator, LaunchPlan,
     NNTask
 )
+
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib.patches import Rectangle
 
 
 @dataclass

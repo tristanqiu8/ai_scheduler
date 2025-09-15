@@ -4,6 +4,7 @@ FPS要求分析窗口计算器
 基于所有任务的FPS要求，计算最优的分析时间窗口
 """
 
+import pytest
 import math
 from typing import List, Dict, Tuple
 from functools import reduce
@@ -241,14 +242,29 @@ def print_fps_analysis_report(fps_list: List[int], max_window_ms: float = 1000.0
         print(f"{window:<10.0f} {exact_str:<10} {total:<10} {example_str}")
 
 
+def test_fps_window_calculator():
+    """Test function for FPS window calculator"""
+    # 测试旧的FPS要求（5的倍数）
+    old_fps_requirements = [25, 10, 10, 5, 25, 60, 25, 25, 25]
+    print("旧FPS要求测试:")
+    print_fps_analysis_report(old_fps_requirements)
+
+    print("\n" + "="*80 + "\n")
+
+    # 测试新的FPS要求（非5的倍数）
+    new_fps_requirements = [33, 13, 13, 7, 33, 80, 33, 33, 33]
+    print("新FPS要求测试:")
+    print_fps_analysis_report(new_fps_requirements)
+
+
 if __name__ == "__main__":
     # 测试旧的FPS要求（5的倍数）
     old_fps_requirements = [25, 10, 10, 5, 25, 60, 25, 25, 25]
     print("旧FPS要求测试:")
     print_fps_analysis_report(old_fps_requirements)
-    
+
     print("\n" + "="*80 + "\n")
-    
+
     # 测试新的FPS要求（非5的倍数）
     new_fps_requirements = [33, 13, 13, 7, 33, 80, 33, 33, 33]
     print("新FPS要求测试:")
