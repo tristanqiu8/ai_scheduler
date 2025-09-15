@@ -3,6 +3,12 @@ Test directory conftest.py
 Test fixtures and configuration
 """
 
+import sys
+import os
+
+# 添加项目根目录到 Python 路径
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pytest
 from NNScheduler.core.resource_queue import ResourceQueueManager
 from NNScheduler.core.schedule_tracer import ScheduleTracer
