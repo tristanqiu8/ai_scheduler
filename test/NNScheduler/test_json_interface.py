@@ -302,18 +302,6 @@ def demo_custom_model():
                 print(f"    - {point.op_id}")
 
 
-def test_json_interface():
-    """Test function for json_interface demo"""
-    # 运行所有演示
-    demo_json_interface()
-    demo_available_models()
-    demo_custom_model()
-
-    print("\n" + "=" * 80)
-    print("JSON Interface Demo Completed!")
-    print("=" * 80)
-
-
 if __name__ == "__main__":
     # 运行所有演示
     demo_json_interface()

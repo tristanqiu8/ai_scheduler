@@ -240,7 +240,7 @@ def test_resource_unit():
     print(f"资源集合大小: {len(resource_set)}")
 
 
-def main():
+if __name__ == "__main__":
     """运行所有测试"""
     print("开始测试 models.py\n")
     
@@ -259,7 +259,3 @@ def main():
     test_resource_unit()
     
     print("\n所有测试完成！")
-
-
-if __name__ == "__main__":
-    main()

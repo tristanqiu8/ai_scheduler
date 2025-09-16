@@ -122,11 +122,7 @@ def test_edge_cases():
         print(f"   映射规则: T2实例n -> T5实例int(n/{ratio})")
 
 
-def run_all_tests():
+if __name__ == "__main__":
     """运行所有测试"""
     test_dependency_mapping()
     test_edge_cases()
-
-
-if __name__ == "__main__":
-    run_all_tests()

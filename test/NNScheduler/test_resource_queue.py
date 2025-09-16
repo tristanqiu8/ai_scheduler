@@ -509,7 +509,7 @@ def test_real_scenario():
         print(f"  {res_id}: 利用率={util:.1f}%, 执行任务数={queue.total_tasks_executed}")
 
 
-def main():
+if __name__ == "__main__":
     """运行所有测试"""
     print("开始测试 resource_queue.py\n")
     
@@ -537,7 +537,3 @@ def main():
     test_real_scenario()
     
     print("\n\n✅ 所有测试完成！")
-
-
-if __name__ == "__main__":
-    main()

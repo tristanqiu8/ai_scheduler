@@ -235,7 +235,7 @@ def test_real_world_scenario():
             print(f"  {task.name}: {duration:.2f}ms")
 
 
-def main():
+if __name__ == "__main__":
     """运行所有测试"""
     print("开始测试精简后的 NNTask 类\n")
     
@@ -254,7 +254,3 @@ def main():
     test_real_world_scenario()
     
     print("\n\n所有测试完成！")
-
-
-if __name__ == "__main__":
-    main()
