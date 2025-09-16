@@ -346,13 +346,43 @@ class TaskLauncher:
         return dep_instance
         
     def _estimate_task_duration(self, task: NNTask) -> float:
-        """估算任务执行时间"""
-        # 使用默认带宽估算
-        bandwidth_map = {
-            ResourceType.NPU: 60.0,
-            ResourceType.DSP: 40.0
-        }
+        """估算任务执行时间 - 基于实际配置的资源带宽"""
+        # 从队列管理器获取实际配置的带宽
+        bandwidth_map = self._get_actual_bandwidth_map()
         return task.estimate_duration(bandwidth_map)
+
+    def _get_actual_bandwidth_map(self) -> Dict[ResourceType, float]:
+        """获取当前场景下实际配置的带宽约束"""
+        bandwidth_map = {}
+
+        # 从资源队列管理器中获取每种资源类型的最佳带宽
+        for resource_id, queue in self.queue_manager.resource_queues.items():
+            resource_type = queue.resource_type
+
+            # 调试信息
+            # print(f"Processing queue {resource_id}: type={resource_type}, bandwidth={queue.bandwidth}")
+
+            # 如果同类型有多个资源，选择带宽最高的作为代表
+            if resource_type not in bandwidth_map or queue.bandwidth > bandwidth_map[resource_type]:
+                bandwidth_map[resource_type] = queue.bandwidth
+
+        # 如果某些资源类型没有配置，使用默认值作为后备
+        default_bandwidth = {
+            ResourceType.NPU: 60.0,
+            ResourceType.DSP: 40.0,
+            ResourceType.ISP: 50.0,
+            ResourceType.CPU: 35.0,
+            ResourceType.GPU: 70.0,
+            ResourceType.VPU: 45.0,
+            ResourceType.FPGA: 50.0
+        }
+
+        # 补充缺失的资源类型
+        for resource_type, default_bw in default_bandwidth.items():
+            if resource_type not in bandwidth_map:
+                bandwidth_map[resource_type] = default_bw
+
+        return bandwidth_map
         
     def notify_task_completion(self, task_id: str, instance_id: int, completion_time: float):
         """通知任务完成"""

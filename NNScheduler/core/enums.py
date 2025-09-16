@@ -2,8 +2,13 @@ from enum import Enum
 
 class ResourceType(Enum):
     """Resource type enumeration"""
-    DSP = "DSP"
-    NPU = "NPU"
+    DSP = "DSP"      # 数字信号处理器（支持切分）
+    NPU = "NPU"      # 神经网络处理器（支持切分）
+    ISP = "ISP"      # 图像信号处理器（不支持切分）
+    CPU = "CPU"      # 中央处理器（不支持切分）
+    GPU = "GPU"      # 图形处理器（不支持切分）
+    VPU = "VPU"      # 视频处理器（不支持切分）
+    FPGA = "FPGA"    # 现场可编程门阵列（不支持切分）
 
 class TaskPriority(Enum):
     """Task priority levels (from high to low)"""
