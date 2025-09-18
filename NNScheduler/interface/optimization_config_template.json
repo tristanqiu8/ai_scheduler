@@ -1,0 +1,27 @@
+{
+  "optimization": {
+    "max_iterations": 50,
+    "max_time_seconds": 300,
+    "target_satisfaction": 0.95,
+    "time_window": 1000.0,
+    "segment_mode": true,
+    "enable_detailed_analysis": true
+  },
+  "resources": {
+    "resources": [
+      {
+        "resource_id": "NPU_0",
+        "resource_type": "NPU",
+        "bandwidth": 160.0
+      },
+      {
+        "resource_id": "DSP_0",
+        "resource_type": "DSP",
+        "bandwidth": 160.0
+      }
+    ]
+  },
+  "scenario": {
+    "use_camera_tasks": true
+  }
+}

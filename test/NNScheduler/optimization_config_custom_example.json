@@ -1,0 +1,80 @@
+{
+  "optimization": {
+    "max_iterations": 50,
+    "max_time_seconds": 300,
+    "target_satisfaction": 0.95,
+    "time_window": 1000.0,
+    "segment_mode": true,
+    "enable_detailed_analysis": true
+  },
+  "resources": {
+    "resources": [
+      {
+        "resource_id": "NPU_0",
+        "resource_type": "NPU",
+        "bandwidth": 160.0
+      },
+      {
+        "resource_id": "DSP_0",
+        "resource_type": "DSP",
+        "bandwidth": 160.0
+      }
+    ]
+  },
+  "scenario": {
+    "use_camera_tasks": false,
+    "scenario_name": "Simple Custom Scenario",
+    "description": "简单自定义场景测试",
+    "tasks": [
+      {
+        "task_id": "MAIN_TASK",
+        "name": "MainProcessingTask",
+        "priority": "HIGH",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "ADAPTIVE_SEGMENTATION",
+        "fps": 30.0,
+        "latency": 33.3,
+        "model": {
+          "segments": [
+            {
+              "resource_type": "NPU",
+              "duration_table": {
+                "80": 20.0,
+                "120": 15.0,
+                "160": 12.0
+              },
+              "segment_id": "npu_main",
+              "power": 400.0,
+              "ddr": 20.0
+            }
+          ]
+        }
+      },
+      {
+        "task_id": "HELPER_TASK",
+        "name": "HelperTask",
+        "priority": "NORMAL",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 15.0,
+        "latency": 60.0,
+        "dependencies": ["MAIN_TASK"],
+        "model": {
+          "segments": [
+            {
+              "resource_type": "DSP",
+              "duration_table": {
+                "80": 25.0,
+                "120": 20.0,
+                "160": 15.0
+              },
+              "segment_id": "dsp_helper",
+              "power": 200.0,
+              "ddr": 10.0
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

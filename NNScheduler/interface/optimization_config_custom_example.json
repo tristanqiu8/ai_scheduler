@@ -1,0 +1,185 @@
+{
+  "optimization": {
+    "max_iterations": 30,
+    "max_time_seconds": 180,
+    "target_satisfaction": 0.90,
+    "time_window": 1000.0,
+    "segment_mode": true,
+    "enable_detailed_analysis": true
+  },
+  "resources": {
+    "resources": [
+      {
+        "resource_id": "NPU_0",
+        "resource_type": "NPU",
+        "bandwidth": 160.0
+      },
+      {
+        "resource_id": "DSP_0",
+        "resource_type": "DSP",
+        "bandwidth": 160.0
+      },
+      {
+        "resource_id": "ISP_0",
+        "resource_type": "ISP",
+        "bandwidth": 120.0
+      },
+      {
+        "resource_id": "GPU_0",
+        "resource_type": "GPU",
+        "bandwidth": 200.0
+      }
+    ]
+  },
+  "scenario": {
+    "use_camera_tasks": false,
+    "scenario_name": "Custom Multi-Backend Optimization Scenario",
+    "description": "自定义多后端优化场景，展示ISP->NPU->GPU->DSP流水线",
+    "tasks": [
+      {
+        "task_id": "VISION_MAIN",
+        "name": "VisionMainTask",
+        "priority": "HIGH",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "FORCED_SEGMENTATION",
+        "fps": 30.0,
+        "latency": 33.3,
+        "model": {
+          "segments": [
+            {
+              "resource_type": "ISP",
+              "duration_table": {
+                "80": 8.0,
+                "120": 6.0,
+                "160": 5.0
+              },
+              "segment_id": "isp_preprocess",
+              "power": 200.0,
+              "ddr": 10.0
+            },
+            {
+              "resource_type": "NPU",
+              "duration_table": {
+                "80": 15.0,
+                "120": 12.0,
+                "160": 10.0
+              },
+              "segment_id": "npu_inference",
+              "power": 500.0,
+              "ddr": 25.0
+            }
+          ],
+          "cut_points": {
+            "npu_inference": [
+              {
+                "op_id": "conv_block_1",
+                "perf_lut": {
+                  "80": 6.0,
+                  "120": 5.0,
+                  "160": 4.0
+                },
+                "overhead_ms": 0.5
+              },
+              {
+                "op_id": "conv_block_2",
+                "perf_lut": {
+                  "80": 9.0,
+                  "120": 7.0,
+                  "160": 6.0
+                },
+                "overhead_ms": 0.5
+              }
+            ]
+          }
+        }
+      },
+      {
+        "task_id": "RENDER_TASK",
+        "name": "RenderTask",
+        "priority": "NORMAL",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 30.0,
+        "latency": 20.0,
+        "dependencies": ["VISION_MAIN"],
+        "model": {
+          "segments": [
+            {
+              "resource_type": "GPU",
+              "duration_table": {
+                "120": 12.0,
+                "160": 10.0,
+                "200": 8.0
+              },
+              "segment_id": "gpu_render",
+              "power": 800.0,
+              "ddr": 40.0
+            }
+          ]
+        }
+      },
+      {
+        "task_id": "AUDIO_PROC",
+        "name": "AudioProcessing",
+        "priority": "NORMAL",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 15.0,
+        "latency": 60.0,
+        "model": {
+          "segments": [
+            {
+              "resource_type": "DSP",
+              "duration_table": {
+                "80": 25.0,
+                "120": 20.0,
+                "160": 15.0
+              },
+              "segment_id": "dsp_audio",
+              "power": 150.0,
+              "ddr": 8.0
+            }
+          ]
+        }
+      },
+      {
+        "task_id": "FACE_DET",
+        "name": "FaceDetection",
+        "priority": "LOW",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "ADAPTIVE_SEGMENTATION",
+        "fps": 10.0,
+        "latency": 100.0,
+        "dependencies": ["VISION_MAIN"],
+        "model": {
+          "model_name": "FaceEhnsLite"
+        }
+      },
+      {
+        "task_id": "POST_PROC",
+        "name": "PostProcessing",
+        "priority": "LOW",
+        "runtime_type": "DSP_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 30.0,
+        "latency": 15.0,
+        "dependencies": ["RENDER_TASK"],
+        "model": {
+          "segments": [
+            {
+              "resource_type": "DSP",
+              "duration_table": {
+                "80": 8.0,
+                "120": 6.0,
+                "160": 5.0
+              },
+              "segment_id": "dsp_postproc",
+              "power": 100.0,
+              "ddr": 5.0
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
