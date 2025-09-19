@@ -172,7 +172,7 @@ class NNTask:
             self.segments = segments
             
             # 如果是FORCED_SEGMENTATION策略，自动应用切分点
-            if self.segmentation_strategy == SegmentationStrategy.FORCED_SEGMENTATION:
+            if self.segmentation_strategy == SegmentationStrategy.FORCED_SEGMENTATION and cut_points:
                 for segment_id, cuts in cut_points.items():
                     segment = self.get_segment_by_id(segment_id)
                     if segment:

@@ -1,13 +1,13 @@
 {
   "optimization": {
-    "max_iterations": 50,
-    "max_time_seconds": 300,
-    "target_satisfaction": 0.95,
+    "max_iterations": 10,
+    "max_time_seconds": 60,
+    "target_satisfaction": 0.90,
     "time_window": 1000.0,
     "segment_mode": true,
     "enable_detailed_analysis": true,
-    "search_priority": true,
-    "log_level": "normal"
+    "search_priority": false,
+    "log_level": "detailed"
   },
   "resources": {
     "resources": [
@@ -25,12 +25,12 @@
   },
   "scenario": {
     "use_camera_tasks": false,
-    "scenario_name": "Template Scenario",
-    "description": "模板场景示例",
+    "scenario_name": "Detailed Log Test",
+    "description": "测试detailed日志级别功能",
     "tasks": [
       {
-        "task_id": "TASK_1",
-        "name": "PrimaryTask",
+        "task_id": "LOG_TASK_1",
+        "name": "DetailedLogTask1",
         "priority": "HIGH",
         "runtime_type": "ACPU_RUNTIME",
         "segmentation_strategy": "ADAPTIVE_SEGMENTATION",
@@ -45,32 +45,18 @@
                 "120": 15.0,
                 "160": 12.0
               },
-              "segment_id": "npu_primary",
-              "power": 450.0,
-              "ddr": 22.0
-            }
-          ]
-        }
-      },
-      {
-        "task_id": "TASK_2",
-        "name": "SecondaryTask",
-        "priority": "NORMAL",
-        "runtime_type": "ACPU_RUNTIME",
-        "segmentation_strategy": "NO_SEGMENTATION",
-        "fps": 20.0,
-        "latency": 50.0,
-        "dependencies": ["TASK_1"],
-        "model": {
-          "segments": [
+              "segment_id": "npu_task1_seg1",
+              "power": 400.0,
+              "ddr": 20.0
+            },
             {
               "resource_type": "DSP",
               "duration_table": {
-                "80": 30.0,
-                "120": 25.0,
-                "160": 20.0
+                "80": 15.0,
+                "120": 12.0,
+                "160": 10.0
               },
-              "segment_id": "dsp_secondary",
+              "segment_id": "dsp_task1_seg2",
               "power": 300.0,
               "ddr": 15.0
             }
@@ -78,13 +64,14 @@
         }
       },
       {
-        "task_id": "TASK_3",
-        "name": "BackgroundTask",
-        "priority": "LOW",
+        "task_id": "LOG_TASK_2",
+        "name": "DetailedLogTask2",
+        "priority": "NORMAL",
         "runtime_type": "ACPU_RUNTIME",
         "segmentation_strategy": "NO_SEGMENTATION",
-        "fps": 10.0,
-        "latency": 100.0,
+        "fps": 20.0,
+        "latency": 50.0,
+        "dependencies": ["LOG_TASK_1"],
         "model": {
           "segments": [
             {
@@ -94,9 +81,9 @@
                 "120": 20.0,
                 "160": 15.0
               },
-              "segment_id": "npu_background",
-              "power": 200.0,
-              "ddr": 10.0
+              "segment_id": "npu_task2",
+              "power": 350.0,
+              "ddr": 18.0
             }
           ]
         }

@@ -1,0 +1,208 @@
+{
+  "optimization": {
+    "max_iterations": 30,
+    "max_time_seconds": 120,
+    "target_satisfaction": 0.85,
+    "time_window": 1000.0,
+    "segment_mode": true,
+    "enable_detailed_analysis": true,
+    "search_priority": true,
+    "log_level": "normal"
+  },
+  "resources": {
+    "resources": [
+      {
+        "resource_id": "NPU_0",
+        "resource_type": "NPU",
+        "bandwidth": 160.0
+      },
+      {
+        "resource_id": "DSP_0",
+        "resource_type": "DSP",
+        "bandwidth": 160.0
+      }
+    ]
+  },
+  "scenario": {
+    "use_camera_tasks": false,
+    "scenario_name": "Mixed Task Types Scenario 1",
+    "description": "1NPU+1DSP配置，包含4种混合任务类型：长时NPU可分段+3段NPU+DSP混合+纯DSP+DSP→NPU依赖",
+    "tasks": [
+      {
+        "task_id": "LONG_NPU_TASK",
+        "name": "LongNpuSegmentedTask",
+        "priority": "HIGH",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "FORCED_SEGMENTATION",
+        "fps": 25.0,
+        "latency": 45.0,
+        "model": {
+          "segments": [
+            {
+              "resource_type": "NPU",
+              "duration_table": {
+                "80": 15.0,
+                "120": 12.5,
+                "160": 11.0
+              },
+              "segment_id": "long_npu_seg1",
+              "power": 520.0,
+              "ddr": 28.0
+            },
+            {
+              "resource_type": "NPU",
+              "duration_table": {
+                "80": 8.5,
+                "120": 7.0,
+                "160": 6.2
+              },
+              "segment_id": "long_npu_seg2",
+              "power": 480.0,
+              "ddr": 22.0
+            }
+          ],
+          "cut_points": {
+            "long_npu_seg1": [
+              {
+                "op_id": "conv_layer_1",
+                "perf_lut": {"80": 1.2, "120": 1.0, "160": 0.8},
+                "overhead_ms": 0.1
+              },
+              {
+                "op_id": "conv_layer_2",
+                "perf_lut": {"80": 1.1, "120": 0.9, "160": 0.7},
+                "overhead_ms": 0.1
+              }
+            ],
+            "long_npu_seg2": [
+              {
+                "op_id": "dense_layer_1",
+                "perf_lut": {"80": 0.8, "120": 0.7, "160": 0.5},
+                "overhead_ms": 0.05
+              }
+            ]
+          }
+        }
+      },
+      {
+        "task_id": "HYBRID_3SEG_TASK",
+        "name": "Hybrid3SegmentTask",
+        "priority": "NORMAL",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "FORCED_SEGMENTATION",
+        "fps": 30.0,
+        "latency": 32.0,
+        "model": {
+          "segments": [
+            {
+              "resource_type": "NPU",
+              "duration_table": {
+                "80": 4.1,
+                "120": 3.4,
+                "160": 2.8
+              },
+              "segment_id": "hybrid_npu_seg1",
+              "power": 460.0,
+              "ddr": 21.0
+            },
+            {
+              "resource_type": "DSP",
+              "duration_table": {
+                "80": 3.5,
+                "120": 2.9,
+                "160": 2.4
+              },
+              "segment_id": "hybrid_dsp_seg1",
+              "power": 240.0,
+              "ddr": 14.0
+            },
+            {
+              "resource_type": "NPU",
+              "duration_table": {
+                "80": 3.8,
+                "120": 3.1,
+                "160": 2.6
+              },
+              "segment_id": "hybrid_npu_seg2",
+              "power": 420.0,
+              "ddr": 18.0
+            }
+          ]
+        }
+      },
+      {
+        "task_id": "PURE_DSP_TASK",
+        "name": "PureDspTask",
+        "priority": "LOW",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 50.0,
+        "latency": 20.0,
+        "model": {
+          "segments": [
+            {
+              "resource_type": "DSP",
+              "duration_table": {
+                "80": 2.8,
+                "120": 2.3,
+                "160": 1.9
+              },
+              "segment_id": "pure_dsp",
+              "power": 160.0,
+              "ddr": 6.0
+            }
+          ]
+        }
+      },
+      {
+        "task_id": "DSP_PREPROCESS_TASK",
+        "name": "DspPreprocessTask",
+        "priority": "HIGH",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 40.0,
+        "latency": 25.0,
+        "model": {
+          "segments": [
+            {
+              "resource_type": "DSP",
+              "duration_table": {
+                "80": 3.2,
+                "120": 2.6,
+                "160": 2.1
+              },
+              "segment_id": "dsp_preprocess",
+              "power": 220.0,
+              "ddr": 10.0
+            }
+          ]
+        }
+      },
+      {
+        "task_id": "NPU_INFERENCE_TASK",
+        "name": "NpuInferenceTask",
+        "priority": "HIGH",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 40.0,
+        "latency": 20.0,
+        "dependencies": ["DSP_PREPROCESS_TASK"],
+        "model": {
+          "segments": [
+            {
+              "resource_type": "NPU",
+              "duration_table": {
+                "80": 5.8,
+                "120": 4.8,
+                "160": 3.9
+              },
+              "segment_id": "npu_inference",
+              "power": 510.0,
+              "ddr": 26.0
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

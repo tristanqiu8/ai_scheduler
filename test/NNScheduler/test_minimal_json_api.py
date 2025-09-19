@@ -13,21 +13,35 @@ def setup_project_path():
     """动态查找并添加项目根目录到Python路径"""
     current_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # 向上查找包含NNScheduler目录的根目录
+    # 向上查找包含NNScheduler模块目录的根目录
     project_root = current_dir
-    while project_root != os.path.dirname(project_root):  # 直到根目录
-        if os.path.exists(os.path.join(project_root, 'NNScheduler')):
+    search_count = 0
+    while project_root != os.path.dirname(project_root) and search_count < 10:  # 防止无限循环
+        nnscheduler_path = os.path.join(project_root, 'NNScheduler')
+        interface_path = os.path.join(nnscheduler_path, 'interface')
+
+        # 确保这是真正的NNScheduler模块目录(包含interface子目录)
+        if os.path.exists(nnscheduler_path) and os.path.exists(interface_path):
             break
         project_root = os.path.dirname(project_root)
+        search_count += 1
 
-    if os.path.exists(os.path.join(project_root, 'NNScheduler')):
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
+    nnscheduler_check = os.path.join(project_root, 'NNScheduler')
+    interface_check = os.path.join(nnscheduler_check, 'interface')
+    if os.path.exists(nnscheduler_check) and os.path.exists(interface_check):
+        # 确保项目根目录在Python路径的最前面
+        if project_root in sys.path:
+            sys.path.remove(project_root)
+        sys.path.insert(0, project_root)
         return project_root
     else:
-        raise ImportError(f"无法找到NNScheduler模块。请确保在ai_scheduler项目目录或其子目录中运行此脚本。")
+        raise ImportError(f"无法找到NNScheduler模块。搜索路径: {project_root}")
 
-setup_project_path()
+try:
+    setup_project_path()
+except Exception as e:
+    print(f"[ERROR] 设置Python路径失败: {e}")
+    sys.exit(1)
 
 import json
 import time

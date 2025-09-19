@@ -1,8 +1,8 @@
 {
   "optimization": {
-    "max_iterations": 50,
-    "max_time_seconds": 300,
-    "target_satisfaction": 0.95,
+    "max_iterations": 30,
+    "max_time_seconds": 180,
+    "target_satisfaction": 0.90,
     "time_window": 1000.0,
     "segment_mode": true,
     "enable_detailed_analysis": true,
@@ -25,13 +25,13 @@
   },
   "scenario": {
     "use_camera_tasks": false,
-    "scenario_name": "Template Scenario",
-    "description": "模板场景示例",
+    "scenario_name": "Search Priority Enabled Test",
+    "description": "测试启用优先级搜索功能",
     "tasks": [
       {
-        "task_id": "TASK_1",
-        "name": "PrimaryTask",
-        "priority": "HIGH",
+        "task_id": "USER_TASK_1",
+        "name": "UserHighPriorityTask",
+        "priority": "LOW",
         "runtime_type": "ACPU_RUNTIME",
         "segmentation_strategy": "ADAPTIVE_SEGMENTATION",
         "fps": 30.0,
@@ -41,46 +41,46 @@
             {
               "resource_type": "NPU",
               "duration_table": {
-                "80": 18.0,
-                "120": 15.0,
-                "160": 12.0
+                "80": 25.0,
+                "120": 20.0,
+                "160": 15.0
               },
-              "segment_id": "npu_primary",
-              "power": 450.0,
-              "ddr": 22.0
+              "segment_id": "npu_high_task",
+              "power": 500.0,
+              "ddr": 25.0
             }
           ]
         }
       },
       {
-        "task_id": "TASK_2",
-        "name": "SecondaryTask",
-        "priority": "NORMAL",
+        "task_id": "USER_TASK_2",
+        "name": "UserNormalPriorityTask",
+        "priority": "CRITICAL",
         "runtime_type": "ACPU_RUNTIME",
         "segmentation_strategy": "NO_SEGMENTATION",
         "fps": 20.0,
         "latency": 50.0,
-        "dependencies": ["TASK_1"],
+        "dependencies": ["USER_TASK_1"],
         "model": {
           "segments": [
             {
               "resource_type": "DSP",
               "duration_table": {
-                "80": 30.0,
-                "120": 25.0,
-                "160": 20.0
+                "80": 40.0,
+                "120": 30.0,
+                "160": 25.0
               },
-              "segment_id": "dsp_secondary",
+              "segment_id": "dsp_normal_task",
               "power": 300.0,
-              "ddr": 15.0
+              "ddr": 18.0
             }
           ]
         }
       },
       {
-        "task_id": "TASK_3",
-        "name": "BackgroundTask",
-        "priority": "LOW",
+        "task_id": "USER_TASK_3",
+        "name": "UserLowPriorityTask",
+        "priority": "HIGH",
         "runtime_type": "ACPU_RUNTIME",
         "segmentation_strategy": "NO_SEGMENTATION",
         "fps": 10.0,
@@ -90,13 +90,13 @@
             {
               "resource_type": "NPU",
               "duration_table": {
-                "80": 25.0,
-                "120": 20.0,
-                "160": 15.0
+                "80": 30.0,
+                "120": 25.0,
+                "160": 20.0
               },
-              "segment_id": "npu_background",
-              "power": 200.0,
-              "ddr": 10.0
+              "segment_id": "npu_low_task",
+              "power": 250.0,
+              "ddr": 12.0
             }
           ]
         }

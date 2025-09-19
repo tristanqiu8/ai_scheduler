@@ -86,21 +86,47 @@ class OptimizationInterface:
         scenario_config = config.get("scenario", {})
         resource_config = config.get("resources", {})
 
+        # 从配置中读取search_priority设置，默认为true
+        search_priority = optimization_config.get("search_priority", True)
+
+        # 从配置中读取log_level设置，默认为"normal"
+        log_level = optimization_config.get("log_level", "normal")
+
         # 创建任务
         if "use_camera_tasks" in scenario_config and scenario_config["use_camera_tasks"]:
             # 使用预定义的相机任务
             tasks = create_real_tasks()
+            # 对于预定义任务，如果不进行搜索，需要从任务本身获取优先级
+            user_priority_config = {}
+            if not search_priority:
+                for task in tasks:
+                    user_priority_config[task.task_id] = task.priority.name
         else:
             # 从JSON配置创建任务
             tasks = JsonInterface.parse_scenario_config(scenario_config)
+            # 提取用户配置的优先级信息
+            user_priority_config = {}
+            for task_config in scenario_config.get("tasks", []):
+                task_id = task_config.get("task_id")
+                priority = task_config.get("priority", "NORMAL")
+                user_priority_config[task_id] = priority
 
         # 创建优化器
         optimizer = JsonPriorityOptimizer(
             tasks=tasks,
             time_window=optimization_config.get("time_window", 1000.0),
             segment_mode=optimization_config.get("segment_mode", True),
-            resources=resource_config
+            resources=resource_config,
+            search_priority=search_priority,
+            user_priority_config=user_priority_config
         )
+
+        # 设置日志级别
+        if log_level == "detailed":
+            set_execution_log_enabled(True)
+            print(f"[INFO] 启用详细日志模式，将显示任务入队、出队和执行详情")
+        else:
+            set_execution_log_enabled(False)
 
         # 执行优化
         best_config, best_result = optimizer.optimize(
@@ -108,6 +134,10 @@ class OptimizationInterface:
             max_time_seconds=optimization_config.get("max_time_seconds", 300),
             target_satisfaction=optimization_config.get("target_satisfaction", 0.95)
         )
+
+        # 优化完成后恢复默认日志设置
+        if log_level == "detailed":
+            set_execution_log_enabled(False)
 
         # 准备结果
         result = {
@@ -131,7 +161,7 @@ class OptimizationInterface:
 
         # 生成可视化文件
         visualization_files = self._generate_visualizations(
-            tasks, best_config, resource_config, optimization_config
+            tasks, best_config, resource_config, optimization_config, log_level
         )
         result["visualization_files"] = visualization_files
 
@@ -145,7 +175,7 @@ class OptimizationInterface:
         return result
 
     def _generate_visualizations(self, tasks: List[NNTask], best_config: Dict[str, TaskPriority],
-                               resource_config: Dict[str, Any], optimization_config: Dict[str, Any]) -> Dict[str, str]:
+                               resource_config: Dict[str, Any], optimization_config: Dict[str, Any], log_level: str = "normal") -> Dict[str, str]:
         """生成可视化文件"""
         # 应用最佳配置
         for task in tasks:
@@ -173,11 +203,19 @@ class OptimizationInterface:
         for task in tasks:
             launcher.register_task(task)
 
+        # 设置日志级别
+        if log_level == "detailed":
+            set_execution_log_enabled(True)
+
         # 执行调度
         time_window = optimization_config.get("time_window", 1000.0)
         plan = launcher.create_launch_plan(time_window, "balanced")
         executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
         executor.execute_plan(plan, time_window, segment_mode=segment_mode)
+
+        # 恢复默认日志设置
+        if log_level == "detailed":
+            set_execution_log_enabled(False)
 
         # 生成可视化
         visualizer = ScheduleVisualizer(tracer)
@@ -237,11 +275,13 @@ class OptimizationInterface:
 class JsonPriorityOptimizer:
     """JSON版本的优先级优化器 - 与test_cam_auto_priority_optimization.py功能相同"""
 
-    def __init__(self, tasks: List[NNTask], time_window=1000.0, segment_mode=True, resources=None):
+    def __init__(self, tasks: List[NNTask], time_window=1000.0, segment_mode=True, resources=None, search_priority=True, user_priority_config=None):
         self.tasks = tasks
         self.time_window = time_window
         self.segment_mode = segment_mode
         self.resources = resources or {}
+        self.search_priority = search_priority
+        self.user_priority_config = user_priority_config or {}
 
         # 分析任务特征
         self.task_features = self._analyze_task_features()
@@ -339,6 +379,31 @@ class JsonPriorityOptimizer:
                 priority_config[task_id] = TaskPriority.NORMAL
             else:
                 priority_config[task_id] = TaskPriority.LOW
+
+        return priority_config
+
+    def parse_user_priorities(self) -> Dict[str, TaskPriority]:
+        """解析用户配置的优先级"""
+        priority_config = {}
+
+        for task in self.tasks:
+            if task.task_id in self.user_priority_config:
+                # 从用户配置中获取优先级
+                priority_str = self.user_priority_config[task.task_id]
+                if priority_str.upper() == "CRITICAL":
+                    priority_config[task.task_id] = TaskPriority.CRITICAL
+                elif priority_str.upper() == "HIGH":
+                    priority_config[task.task_id] = TaskPriority.HIGH
+                elif priority_str.upper() == "NORMAL":
+                    priority_config[task.task_id] = TaskPriority.NORMAL
+                elif priority_str.upper() == "LOW":
+                    priority_config[task.task_id] = TaskPriority.LOW
+                else:
+                    # 如果用户配置的优先级无效，使用默认值
+                    priority_config[task.task_id] = TaskPriority.NORMAL
+            else:
+                # 如果用户没有配置这个任务的优先级，使用默认值
+                priority_config[task.task_id] = TaskPriority.NORMAL
 
         return priority_config
 
@@ -515,6 +580,18 @@ class JsonPriorityOptimizer:
     def optimize(self, max_iterations=50, max_time_seconds=300, target_satisfaction=1.0) -> Tuple[Dict[str, TaskPriority], OptimizationResult]:
         """执行优化过程"""
         start_time = time.time()
+
+        # 根据search_priority设置决定是否进行优先级搜索
+        if not self.search_priority:
+            # 如果不进行优先级搜索，直接使用用户配置的优先级
+            current_config = self.parse_user_priorities()
+            result = self.evaluate_configuration(current_config)
+            self.optimization_history.append(result)
+            print(f"[INFO] 使用用户配置的优先级，跳过优化搜索")
+            return current_config, result
+
+        # 进行优先级搜索优化
+        print(f"[INFO] 启用优先级搜索优化，最大迭代次数: {max_iterations}")
 
         # 生成初始配置
         current_config = self.generate_initial_priorities()
