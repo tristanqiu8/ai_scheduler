@@ -27,7 +27,7 @@ except ImportError:
 
 
 @dataclass
-class TestResult:
+class SchedulingTestResult:
     """测试结果"""
     config: 'SchedulingConfig'
     stats: Dict
@@ -58,7 +58,7 @@ class SchedulingTestFramework:
             tasks: 任务列表
         """
         self.tasks = tasks
-        self.results: Dict[str, TestResult] = {}
+        self.results: Dict[str, SchedulingTestResult] = {}
     
     def calculate_theory_demand(self, tasks: List, config: SchedulingConfig) -> Dict:
         """
@@ -109,7 +109,7 @@ class SchedulingTestFramework:
             'feasible': npu_utilization <= 100 and dsp_utilization <= 100
         }
     
-    def run_test(self, config: SchedulingConfig, verbose: bool = True) -> TestResult:
+    def run_test(self, config: SchedulingConfig, verbose: bool = True) -> SchedulingTestResult:
         """
         运行单个测试
         
@@ -166,7 +166,7 @@ class SchedulingTestFramework:
         )
         
         # 7. 创建结果
-        result = TestResult(
+        result = SchedulingTestResult(
             config=config,
             stats=stats,
             metrics=metrics,
@@ -183,7 +183,7 @@ class SchedulingTestFramework:
         
         return result
     
-    def run_comparison_tests(self, configs: List[SchedulingConfig]) -> Dict[str, TestResult]:
+    def run_comparison_tests(self, configs: List[SchedulingConfig]) -> Dict[str, SchedulingTestResult]:
         """
         运行多个配置的对比测试
         
@@ -276,7 +276,7 @@ class SchedulingTestFramework:
         total_busy_time = sum(end - start for start, end in merged_intervals)
         return (total_busy_time / window_size) * 100.0
     
-    def _print_test_result(self, result: TestResult):
+    def _print_test_result(self, result: SchedulingTestResult):
         """打印单个测试结果"""
         print(f"\n📈 测试结果:")
         print(f"  完成实例: {result.stats['completed_instances']}")

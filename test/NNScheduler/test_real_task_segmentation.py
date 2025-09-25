@@ -541,7 +541,7 @@ def analyze_segmented_tasks():
     print("- 其他任务保持 NO_SEGMENTATION 策略")
 
 
-def test_single_npu_dsp_baseline(time_window=200.0):
+def run_single_npu_dsp_baseline(time_window=200.0):
     """测试单NPU+单DSP的基准性能"""
     print(f"\n\n=== 基准测试：单NPU + 单DSP (时间窗口: {time_window:.1f}ms) ===\n")
     
@@ -633,6 +633,12 @@ def test_single_npu_dsp_baseline(time_window=200.0):
     print(f"  等待时间: {wait_improvement:+.1f}% (减少)")
     
     return results, tracers
+
+
+def test_single_npu_dsp_baseline(time_window=200.0):
+    """Pytest 包装：验证基准场景可以运行并产生结果"""
+    results, _ = run_single_npu_dsp_baseline(time_window)
+    assert results, "基准场景未返回结果"
 
 
 def check_task_fps_requirements(time_window=200.0):
@@ -782,7 +788,7 @@ def test_real_task_segmentation():
     analyze_bandwidth_scenarios(tasks)
     
     # 2. 基准测试
-    baseline_results, tracers = test_single_npu_dsp_baseline(optimal_window)
+    baseline_results, tracers = run_single_npu_dsp_baseline(optimal_window)
     
     # 2.5 分析执行空隙（新增）
     if '段级模式' in tracers:

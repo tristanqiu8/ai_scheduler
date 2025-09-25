@@ -51,7 +51,7 @@ def create_test_task() -> NNTask:
     task.set_performance_requirements(fps=25.0, latency=60.0)
     return task
 
-def test_bandwidth_estimation_scenarios():
+def run_bandwidth_estimation_scenarios():
     """测试不同带宽配置场景下的估算准确性"""
 
     print("=" * 80)
@@ -211,6 +211,13 @@ def test_bandwidth_estimation_scenarios():
         }
     }
 
+
+def test_bandwidth_estimation_scenarios():
+    """Pytest 包装：确保高性能配置优于低性能配置"""
+    results = run_bandwidth_estimation_scenarios()
+    assert results['high_perf_duration'] < results['low_perf_duration']
+    assert results['bandwidth_maps']['mixed'][ResourceType.NPU] == 70.0
+
 def create_queue_manager(resource_units: List[ResourceUnit]) -> ResourceQueueManager:
     """创建队列管理器"""
     manager = ResourceQueueManager()
@@ -221,7 +228,7 @@ def create_queue_manager(resource_units: List[ResourceUnit]) -> ResourceQueueMan
     return manager
 
 if __name__ == "__main__":
-    results = test_bandwidth_estimation_scenarios()
+    results = run_bandwidth_estimation_scenarios()
 
     print("\n" + "=" * 80)
     print("测试总结")

@@ -207,7 +207,7 @@ def analyze_backend_coverage(tasks: Dict[str, NNTask], resource_units: List[Reso
     for task_id, backends in task_backends.items():
         print(f"  {task_id}: {', '.join(sorted(backends))}")
 
-def test_extended_backend_support():
+def run_extended_backend_support():
     """测试扩展后端支持"""
 
     print("=" * 80)
@@ -338,8 +338,15 @@ def test_extended_backend_support():
         'supported_backends': sorted(unique_backends)
     }
 
+
+def test_extended_backend_support():
+    """Pytest 包装：验证扩展后端数量大于传统后端"""
+    results = run_extended_backend_support()
+    assert results['backend_types'] >= 4
+    assert {'NPU', 'DSP'}.issubset(set(results['supported_backends']))
+
 if __name__ == "__main__":
-    results = test_extended_backend_support()
+    results = run_extended_backend_support()
 
     print(f"\n" + "=" * 80)
     print("测试总结")

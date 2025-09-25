@@ -159,7 +159,7 @@ def analyze_pipeline_tasks(tasks: Dict[str, NNTask]):
         else:
             print(f"  [单后端] 仅使用 {list(unique_resources)[0].value}")
 
-def test_simple_multi_backend():
+def run_simple_multi_backend():
     """测试简化的多后端Pipeline调度"""
 
     print("=" * 80)
@@ -272,8 +272,14 @@ def test_simple_multi_backend():
         'segment_stats': stats_segment
     }
 
+
+def test_simple_multi_backend():
+    """Pytest 包装：运行多后端管线示例并确认成功完成"""
+    results = run_simple_multi_backend()
+    assert results['segment_stats']['completed_instances'] >= 0
+
 if __name__ == "__main__":
-    results = test_simple_multi_backend()
+    results = run_simple_multi_backend()
 
     print(f"\n" + "=" * 80)
     print("测试总结")

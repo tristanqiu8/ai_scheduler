@@ -409,8 +409,8 @@ def main():
         task.priority = best_config[task.task_id]
     
     # 运行详细测试
-    from demo_hybrid_task import test_scheduling_modes, analyze_latency_performance
-    results = test_scheduling_modes(1000.0)
+    from demo_hybrid_task import run_hybrid_scheduling_modes, analyze_latency_performance
+    results = run_hybrid_scheduling_modes(1000.0)
     analyze_latency_performance(results)
 
 

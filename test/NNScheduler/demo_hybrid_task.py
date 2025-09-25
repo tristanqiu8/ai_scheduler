@@ -79,7 +79,7 @@ def analyze_task_demands(tasks, time_window=1000.0):
         print("\n[WARNING] 警告: 资源需求超过可用时间，部分任务可能无法满足FPS要求！")
 
 
-def test_scheduling_modes(time_window=1000.0):
+def run_hybrid_scheduling_modes(time_window=1000.0):
     """测试不同的调度模式"""
     print(f"\n\n[TEST] 调度模式对比测试 (时间窗口: {time_window}ms)")
     print("=" * 100)
@@ -182,6 +182,14 @@ def test_scheduling_modes(time_window=1000.0):
         print(f"  DDR带宽: {total_ddr:.2f} MB/s ({total_ddr_gb:.3f} GB/s)")
     
     return results
+
+
+def test_demo_hybrid_task_scheduling_modes():
+    """Pytest 包装：确保段级模式不劣于传统模式"""
+    results = run_hybrid_scheduling_modes()
+    traditional_stats = results['传统模式']['stats']
+    segmented_stats = results['段级模式']['stats']
+    assert segmented_stats['completed_instances'] >= traditional_stats['completed_instances']
 
 
 def analyze_latency_performance(results):
@@ -368,7 +376,7 @@ def main():
     analyze_task_demands(tasks)
     
     # 3. 执行调度测试
-    results = test_scheduling_modes(time_window=1000.0)
+    results = run_hybrid_scheduling_modes(time_window=1000.0)
     
     # 4. 分析延迟性能
     analyze_latency_performance(results)

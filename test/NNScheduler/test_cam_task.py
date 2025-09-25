@@ -80,7 +80,7 @@ def analyze_task_demands(tasks, time_window=1000.0):
         print("\n[WARNING] 警告: 资源需求超过可用时间，部分任务可能无法满足FPS要求！")
 
 
-def test_scheduling_modes(time_window=1000.0):
+def run_cam_task_scheduling_modes(time_window=1000.0):
     """测试不同的调度模式"""
     print(f"\n\n[TEST] 调度模式对比测试 (时间窗口: {time_window}ms)")
     print("=" * 100)
@@ -154,6 +154,15 @@ def test_scheduling_modes(time_window=1000.0):
         print(f"  DSP利用率: {metrics.avg_dsp_utilization:.1f}%")
     
     return results
+
+
+def test_cam_task_scheduling_modes():
+    """Pytest 包装：验证段级模式带来改进"""
+    results = run_cam_task_scheduling_modes()
+    assert '传统模式' in results and '段级模式' in results
+    traditional_stats = results['传统模式']['stats']
+    segmented_stats = results['段级模式']['stats']
+    assert segmented_stats['completed_instances'] >= traditional_stats['completed_instances']
 
 
 def analyze_latency_performance(results):
@@ -340,7 +349,7 @@ def main():
     analyze_task_demands(tasks)
     
     # 3. 执行调度测试
-    results = test_scheduling_modes(time_window=1000.0)
+    results = run_cam_task_scheduling_modes(time_window=1000.0)
     
     # 4. 分析延迟性能
     analyze_latency_performance(results)

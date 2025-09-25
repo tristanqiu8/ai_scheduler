@@ -577,7 +577,7 @@ class AdvancedGeneticOptimizer:
         ax.legend(handles=legend_elements, loc='upper right')
 
 
-def test_advanced_optimizer():
+def run_advanced_optimizer():
     """测试高级遗传算法优化器"""
     print("[DEMO] 测试高级遗传算法优化器")
     print("="*80)
@@ -666,8 +666,17 @@ def test_advanced_optimizer():
             config = configs[gene.segmentation_config]
             print(f"  分段配置: {len(config) + 1}段")
     
-    return optimizer, best_individual
+    return {
+        'optimizer': optimizer,
+        'best_individual': best_individual
+    }
+
+
+def test_advanced_optimizer():
+    """Pytest 包装：确保优化器返回结果"""
+    result = run_advanced_optimizer()
+    assert result['best_individual'] is not None
 
 
 if __name__ == "__main__":
-    test_advanced_optimizer()
+    run_advanced_optimizer()

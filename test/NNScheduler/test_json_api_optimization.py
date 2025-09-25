@@ -14,7 +14,7 @@ from NNScheduler.interface.json_interface import JsonInterface
 from NNScheduler.core.executor import set_execution_log_enabled
 
 
-def test_json_api_optimization_identical_effect():
+def run_json_api_optimization_identical_effect():
     """
     测试JSON API优化，验证与原始test_cam_auto_priority_optimization.py的一模一样效果
     """
@@ -182,7 +182,7 @@ def test_json_api_optimization_identical_effect():
         return False
 
 
-def test_custom_scenario_optimization():
+def run_custom_scenario_optimization():
     """测试自定义场景优化"""
     print("\n" + "=" * 100)
     print("自定义场景优化测试")
@@ -212,7 +212,7 @@ def test_custom_scenario_optimization():
         return False
 
 
-def test_template_generation():
+def run_template_generation():
     """测试配置模板生成"""
     print("\n" + "=" * 100)
     print("配置模板生成测试")
@@ -234,6 +234,21 @@ def test_template_generation():
     return True
 
 
+def test_json_api_optimization_identical_effect():
+    """Pytest 包装：确保JSON API返回结果"""
+    assert run_json_api_optimization_identical_effect()
+
+
+def test_custom_scenario_optimization():
+    """Pytest 包装：自定义场景应成功运行"""
+    assert run_custom_scenario_optimization()
+
+
+def test_template_generation():
+    """Pytest 包装：模板生成需返回数据"""
+    assert run_template_generation()
+
+
 if __name__ == "__main__":
     print("JSON API优化测试套件")
     print("=" * 100)
@@ -243,9 +258,9 @@ if __name__ == "__main__":
 
     # 运行测试
     tests = [
-        ("主要功能测试 - 验证与原始程序一致的效果", test_json_api_optimization_identical_effect),
-        ("自定义场景测试", test_custom_scenario_optimization),
-        ("模板生成测试", test_template_generation),
+        ("主要功能测试 - 验证与原始程序一致的效果", run_json_api_optimization_identical_effect),
+        ("自定义场景测试", run_custom_scenario_optimization),
+        ("模板生成测试", run_template_generation),
     ]
 
     passed = 0

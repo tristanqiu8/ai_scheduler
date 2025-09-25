@@ -10,8 +10,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 import json
 import time
-import numpy as np
 from typing import Dict, Any, Tuple
+
+import numpy as np
+import pytest
 
 # 导入原始优化器
 from test_cam_auto_priority_optimization import PriorityOptimizer
@@ -354,13 +356,13 @@ def test_optimization_comparison():
         else:
             print("\n[CONCLUSION] ⚠️ JSON API与原始程序存在差异，需要进一步调整")
 
-        return overall_pass
+        assert overall_pass, "JSON API 与原始程序的关键指标存在差异"
 
     except Exception as e:
         print(f"\n[ERROR] 对比验证过程中出现错误: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        pytest.fail(f"对比验证失败: {e}")
 
 
 if __name__ == "__main__":

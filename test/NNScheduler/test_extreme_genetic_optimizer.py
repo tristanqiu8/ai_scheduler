@@ -496,7 +496,7 @@ class ExtremeGeneticOptimizer:
             print(f"  改进: +{self.generation_history[-1]['tail_idle_time'] - self.generation_history[0]['tail_idle_time']:.1f}ms")
 
 
-def test_extreme_optimizer():
+def run_extreme_optimizer():
     """测试极致遗传算法优化器"""
     print("[DEMO] 测试极致遗传算法优化器")
     print("="*80)
@@ -633,9 +633,9 @@ def test_extreme_optimizer():
                     )
         
         # 设置图表属性
-        ax1.set_xlabel('时间 (ms)', fontsize=12)
-        ax1.set_ylabel('资源', fontsize=12)
-        ax1.set_title('任务执行时间线', fontsize=14, weight='bold')
+        ax1.set_xlabel('Time (ms)', fontsize=12)
+        ax1.set_ylabel('Resource', fontsize=12)
+        ax1.set_title('Task Execution Timeline', fontsize=14, weight='bold')
         ax1.grid(True, axis='x', alpha=0.3)
         ax1.set_xlim(0, 200)
         ax1.set_ylim(-0.5, len(all_resources) - 0.5)
@@ -654,15 +654,15 @@ def test_extreme_optimizer():
         # 标记末尾空闲时间
         if best_individual.tail_idle_time > 0:
             idle_start = 200 - best_individual.tail_idle_time
-            ax2.axvspan(0, idle_start, alpha=0.3, color='lightcoral', label='工作时间')
-            ax2.axvspan(idle_start, 200, alpha=0.3, color='lightgreen', label='空闲时间')
+            ax2.axvspan(0, idle_start, alpha=0.3, color='lightcoral', label='Active Time')
+            ax2.axvspan(idle_start, 200, alpha=0.3, color='lightgreen', label='Idle Time')
             ax2.text(idle_start + best_individual.tail_idle_time/2, 0.5,
-                    f'{best_individual.tail_idle_time:.1f}ms\n空闲时间', 
+                    f'{best_individual.tail_idle_time:.1f}ms\nIdle Time', 
                     ha='center', va='center', fontsize=16, fontweight='bold',
                     bbox=dict(boxstyle="round,pad=0.5", facecolor="lightgreen", alpha=0.8))
         
-        ax2.set_xlabel('时间 (ms)', fontsize=12)
-        ax2.set_title('末尾空闲时间分布', fontsize=14, weight='bold')
+        ax2.set_xlabel('Time (ms)', fontsize=12)
+        ax2.set_title('Tail Idle Time Distribution', fontsize=14, weight='bold')
         ax2.legend()
         ax2.set_yticks([])
         
@@ -716,8 +716,19 @@ def test_extreme_optimizer():
           f"{best_individual.tail_idle_time/200*100:.1f}%{'':<10} "
           f"+{(best_individual.tail_idle_time - baseline_idle)/200*100:.1f}%")
     
-    return optimizer, best_plan
+    return {
+        'optimizer': optimizer,
+        'best_plan': best_plan,
+        'baseline_idle': baseline_idle,
+        'optimized_idle': best_individual.tail_idle_time
+    }
+
+
+def test_extreme_optimizer():
+    """Pytest 包装：验证优化后空闲时间优于基线"""
+    result = run_extreme_optimizer()
+    assert result['optimized_idle'] >= result['baseline_idle']
 
 
 if __name__ == "__main__":
-    test_extreme_optimizer()
+    run_extreme_optimizer()

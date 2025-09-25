@@ -27,6 +27,12 @@ from collections import defaultdict
 import concurrent.futures
 from copy import deepcopy
 
+try:
+    import matplotlib
+    matplotlib.use("Agg", force=True)
+except ImportError:  # pragma: no cover - matplotlib 可选依赖
+    matplotlib = None
+
 
 @dataclass
 class Individual:
