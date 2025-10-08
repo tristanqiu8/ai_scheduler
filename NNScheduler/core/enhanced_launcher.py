@@ -79,6 +79,8 @@ class EnhancedTaskLauncher:
         
         # 任务执行时间缓存（用于预测）
         self.task_duration_cache: Dict[str, float] = {}
+        # 依赖完成时间缓存（用于递归估算加速）
+        self._dep_completion_cache: Dict[Tuple[str, int], float] = {}
         
     def register_task(self, task: NNTask):
         """注册任务"""
@@ -100,25 +102,59 @@ class EnhancedTaskLauncher:
         self._cache_task_duration(task)
             
     def _cache_task_duration(self, task: NNTask):
-        """缓存任务的估计执行时间"""
+        """缓存任务的估计执行时间
+
+        使用 queue_manager 中的实际资源带宽（若缺失则使用默认）估算每段时长，
+        并叠加 10% 裕量，作为依赖完成时间估算的经验执行时长。
+        """
         total_duration = 0.0
-        
+
+        # 获取实际带宽映射（按资源类型挑选最高带宽的实例）
+        bw_map = self._get_actual_bandwidth_map()
+
         # 计算所有段的执行时间
         for segment in task.segments:
-            # 使用对应资源的带宽估算
-            if segment.resource_type == ResourceType.NPU:
-                bandwidth = 60.0  # NPU带宽
-            else:
-                bandwidth = 40.0  # DSP带宽
-                
+            bandwidth = bw_map.get(segment.resource_type, 40.0)
             duration = segment.get_duration(bandwidth)
             total_duration += duration
-            
+
         # 添加一些余量（10%）
         self.task_duration_cache[task.task_id] = total_duration * 1.1
+
+    def _get_actual_bandwidth_map(self) -> Dict[ResourceType, float]:
+        """从资源队列中推断各资源类型的代表性带宽
+
+        若同类型有多实例，取带宽最高者；若缺失则使用默认值兜底。
+        """
+        bandwidth_map: Dict[ResourceType, float] = {}
+
+        # 从资源队列管理器中获取每种资源类型的最高带宽
+        for _, queue in self.queue_manager.resource_queues.items():
+            rtype = queue.resource_type
+            if rtype not in bandwidth_map or queue.bandwidth > bandwidth_map[rtype]:
+                bandwidth_map[rtype] = queue.bandwidth
+
+        # 默认兜底值（与 TaskLauncher 保持一致的量级）
+        default_bandwidth = {
+            ResourceType.NPU: 60.0,
+            ResourceType.DSP: 40.0,
+            ResourceType.ISP: 50.0,
+            ResourceType.CPU: 35.0,
+            ResourceType.GPU: 70.0,
+            ResourceType.VPU: 45.0,
+            ResourceType.FPGA: 50.0,
+        }
+
+        for rtype, default_bw in default_bandwidth.items():
+            if rtype not in bandwidth_map:
+                bandwidth_map[rtype] = default_bw
+
+        return bandwidth_map
         
     def create_launch_plan(self, time_window: float, strategy: str = "eager") -> LaunchPlan:
         """创建发射计划 - 使用智能依赖预测"""
+        # 创建计划前清空依赖完成时间缓存，避免跨次调用污染
+        self._dep_completion_cache.clear()
         if strategy == "eager":
             return self._create_smart_eager_plan(time_window)
         elif strategy == "lazy":
@@ -160,7 +196,12 @@ class EnhancedTaskLauncher:
         return plan
         
     def _topological_sort_tasks(self) -> List[str]:
-        """对任务进行拓扑排序"""
+        """对任务进行拓扑排序
+
+        目的：保证依赖的提供者先于消费者出现在顺序中。
+        说明：此排序用于 Balanced/Lazy/Eager 组内的相对顺序基线；
+             Balanced 最终仍会在实例层面通过依赖感知发射时间进行精调。
+        """
         # 计算入度
         in_degree = {task_id: 0 for task_id in self.task_configs}
         
@@ -174,7 +215,8 @@ class EnhancedTaskLauncher:
         sorted_tasks = []
         
         while queue:
-            # 按优先级排序，高优先级优先
+            # 如果同一轮有多个入度为0的候选，按优先级进行择序
+            # 注：TaskPriority.CRITICAL 的 value 更小（优先级更高）
             queue.sort(key=lambda t: -self.task_configs[t].priority.value)
             task_id = queue.pop(0)
             sorted_tasks.append(task_id)
@@ -191,7 +233,16 @@ class EnhancedTaskLauncher:
     def _calculate_launch_time_with_dependencies(
         self, task_id: str, instance: int, base_time: float, time_window: float
     ) -> float:
-        """计算考虑依赖关系的发射时间（支持帧率感知的依赖映射）"""
+        """计算考虑依赖关系的发射时间（支持帧率感知的依赖映射）
+
+        步骤：
+        1) 以组内偏移+实例间隔得到 base_time；
+        2) 对每个依赖：
+           - 将当前实例映射到依赖任务的实例（按 FPS 比例向下取整）；
+           - 递归估算该依赖实例的完成时刻（其自身也会考虑再往前的依赖）；
+           - 将发射时间推迟到依赖完成之后（+1ms 安全裕量）；
+        3) 约束不早于自身的理论最小时间（instance * min_interval）。
+        """
         config = self.task_configs[task_id]
         launch_time = base_time
         
@@ -203,13 +254,13 @@ class EnhancedTaskLauncher:
             # 使用帧率感知的依赖实例映射
             dep_instance = self._get_dependency_instance(task_id, instance, dep_task_id)
             
-            # 估算依赖任务的完成时间
+            # 估算依赖任务的完成时间（递归计算依赖的发射时间 + 经验执行时长）
             dep_completion = self._estimate_dependency_completion(dep_task_id, dep_instance)
             
             # 确保在依赖完成后发射（留1ms余量）
             launch_time = max(launch_time, dep_completion + 1.0)
             
-        # 确保不违反最小间隔
+        # 确保不违反最小间隔（帧率约束）
         if instance > 0:
             min_time = instance * config.min_interval
             launch_time = max(launch_time, min_time)
@@ -217,7 +268,11 @@ class EnhancedTaskLauncher:
         return launch_time
     
     def _get_dependency_instance(self, task_id: str, instance_id: int, dep_id: str) -> int:
-        """获取依赖任务的实例号（考虑帧率差异）"""
+        """获取依赖任务的实例号（考虑帧率差异）
+
+        若依赖任务 FPS 更低：按比例映射到较低频率的对应实例（向下取整），
+        以模拟“低频任务每次完成可供若干个高频实例使用”的关系。
+        """
         config = self.task_configs[task_id]
         dep_config = self.task_configs.get(dep_id)
         
@@ -237,7 +292,15 @@ class EnhancedTaskLauncher:
         return dep_instance
         
     def _estimate_dependency_completion(self, task_id: str, instance_id: int) -> float:
-        """估算依赖任务的完成时间"""
+        """估算依赖任务的完成时间
+
+        完成时间 = 依赖实例的发射时间（递归考虑依赖） + 经验执行时长
+        其中经验执行时长来自 _cache_task_duration 的缓存（NPU≈60/DSP≈40 假设 +10% 裕量）。
+        """
+        cache_key = (task_id, instance_id)
+        if cache_key in self._dep_completion_cache:
+            return self._dep_completion_cache[cache_key]
+
         if task_id not in self.task_configs:
             return 0.0
             
@@ -251,8 +314,9 @@ class EnhancedTaskLauncher:
         
         # 2. 加上执行时间
         execution_time = self.task_duration_cache.get(task_id, 10.0)  # 默认10ms
-        
-        return dep_launch_time + execution_time
+        completion = dep_launch_time + execution_time
+        self._dep_completion_cache[cache_key] = completion
+        return completion
         
     def _create_lazy_plan(self, time_window: float) -> LaunchPlan:
         """创建延迟发射计划"""
@@ -294,7 +358,14 @@ class EnhancedTaskLauncher:
         return plan
         
     def _create_balanced_plan(self, time_window: float) -> LaunchPlan:
-        """创建均衡发射计划"""
+        """创建均衡发射计划
+
+        设计要点：
+        - 先按优先级分组（CRITICAL→HIGH→NORMAL→LOW）；
+        - 组内按拓扑序排列（供应者在前，消费者在后）；
+        - 在一个组内，用固定 5ms 的交错偏移（offset_step）分散不同任务的基础发射时刻；
+        - 对每个实例的基础时刻再做“依赖就绪校正”（见 _calculate_launch_time_with_dependencies）。
+        """
         plan = LaunchPlan()
         
         # 按优先级分组
@@ -308,10 +379,10 @@ class EnhancedTaskLauncher:
             if not tasks:
                 continue
                 
-            # 对组内任务进行拓扑排序
+            # 对组内任务进行拓扑排序（仅保留同组成员的相对顺序）
             sorted_group = [t for t in self._topological_sort_tasks() if t in tasks]
             
-            # 计算组内偏移
+            # 计算组内偏移（将同优先级任务以 5ms 间隔交错开）
             offset_step = 5.0  # 5ms偏移
             
             for i, task_id in enumerate(sorted_group):
@@ -324,7 +395,7 @@ class EnhancedTaskLauncher:
                 else:
                     max_instances = int(time_window / config.min_interval) + 1
                     
-                # 为每个实例规划发射时间
+                # 为每个实例规划发射时间（基础时间 + 依赖就绪校正）
                 for instance in range(max_instances):
                     base_time = base_offset + instance * config.min_interval
                     

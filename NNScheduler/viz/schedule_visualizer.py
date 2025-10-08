@@ -7,6 +7,12 @@
 import json
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
+import matplotlib
+# 使用非交互后端以支持无GUI环境（如CI/服务器）
+try:
+    matplotlib.use('Agg')
+except Exception:
+    pass
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.patches import Rectangle

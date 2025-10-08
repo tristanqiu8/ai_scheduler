@@ -169,7 +169,13 @@ class TaskLauncher:
         return plan
         
     def _create_balanced_plan(self, time_window: float) -> LaunchPlan:
-        """创建均衡发射计划 - 平衡负载"""
+        """创建均衡发射计划 - 平衡负载
+
+        简化版本（非段级智能预测）：
+        - 同样按优先级分组，并在组内以 5ms 偏移交错；
+        - 不进行“依赖完成时间”的估算与推迟，只在可发射性检查中做最小约束；
+        - 若依赖未满足，真正发射时会在 _check_dependencies 中被拦截并延后 1ms 进入待发射堆。
+        """
         plan = LaunchPlan()
         
         # 按优先级分组
@@ -183,7 +189,7 @@ class TaskLauncher:
             if not tasks:
                 continue
                 
-            # 计算组内偏移
+            # 计算组内偏移（同优先级任务的基础错峰）
             offset_step = 5.0  # 5ms偏移
             
             for i, task_id in enumerate(tasks):
@@ -196,7 +202,7 @@ class TaskLauncher:
                     if self._can_launch_at(task_id, launch_time, 0):
                         plan.add_launch(task_id, launch_time, 0)
                 else:
-                    # 周期性发射
+                    # 周期性发射：按帧率间隔在窗口内铺开
                     time = base_offset
                     instance = 0
                     while time < time_window:

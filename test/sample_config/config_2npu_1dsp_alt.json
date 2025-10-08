@@ -7,7 +7,8 @@
     "segment_mode": true,
     "enable_detailed_analysis": true,
     "search_priority": true,
-    "log_level": "normal"
+    "log_level": "normal",
+    "launch_strategy": "balanced"
   },
   "resources": {
     "resources": [

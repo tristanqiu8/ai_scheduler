@@ -92,6 +92,12 @@ class OptimizationInterface:
         # 从配置中读取log_level设置，默认为"normal"
         log_level = optimization_config.get("log_level", "normal")
 
+        # 发射策略（eager|lazy|balanced），默认balanced
+        launch_strategy = str(optimization_config.get("launch_strategy", "balanced")).strip().lower()
+        if launch_strategy not in {"eager", "lazy", "balanced"}:
+            print(f"[WARN] 无效的launch_strategy: {launch_strategy}，已回退为balanced")
+            launch_strategy = "balanced"
+
         # 创建任务
         if "use_camera_tasks" in scenario_config and scenario_config["use_camera_tasks"]:
             # 使用预定义的相机任务
@@ -118,7 +124,8 @@ class OptimizationInterface:
             segment_mode=optimization_config.get("segment_mode", True),
             resources=resource_config,
             search_priority=search_priority,
-            user_priority_config=user_priority_config
+            user_priority_config=user_priority_config,
+            launch_strategy=launch_strategy
         )
 
         # 设置日志级别
@@ -209,7 +216,13 @@ class OptimizationInterface:
 
         # 执行调度
         time_window = optimization_config.get("time_window", 1000.0)
-        plan = launcher.create_launch_plan(time_window, "balanced")
+        # 读取并规范化发射策略
+        launch_strategy = str(optimization_config.get("launch_strategy", "balanced")).strip().lower()
+        if launch_strategy not in {"eager", "lazy", "balanced"}:
+            print(f"[WARN] 无效的launch_strategy: {launch_strategy}，已回退为balanced")
+            launch_strategy = "balanced"
+
+        plan = launcher.create_launch_plan(time_window, launch_strategy)
         executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
         executor.execute_plan(plan, time_window, segment_mode=segment_mode)
 
@@ -244,7 +257,8 @@ class OptimizationInterface:
                 "target_satisfaction": 0.95,
                 "time_window": 1000.0,
                 "segment_mode": True,
-                "enable_detailed_analysis": True
+                "enable_detailed_analysis": True,
+                "launch_strategy": "balanced"
             },
             "resources": {
                 "resources": [
@@ -275,13 +289,18 @@ class OptimizationInterface:
 class JsonPriorityOptimizer:
     """JSON版本的优先级优化器 - 与test_cam_auto_priority_optimization.py功能相同"""
 
-    def __init__(self, tasks: List[NNTask], time_window=1000.0, segment_mode=True, resources=None, search_priority=True, user_priority_config=None):
+    def __init__(self, tasks: List[NNTask], time_window=1000.0, segment_mode=True, resources=None,
+                 search_priority=True, user_priority_config=None, launch_strategy: str = "balanced"):
         self.tasks = tasks
         self.time_window = time_window
         self.segment_mode = segment_mode
         self.resources = resources or {}
         self.search_priority = search_priority
         self.user_priority_config = user_priority_config or {}
+        # 规范化发射策略
+        self.launch_strategy = str(launch_strategy).strip().lower()
+        if self.launch_strategy not in {"eager", "lazy", "balanced"}:
+            self.launch_strategy = "balanced"
 
         # 分析任务特征
         self.task_features = self._analyze_task_features()
@@ -435,7 +454,7 @@ class JsonPriorityOptimizer:
             launcher.register_task(task)
 
         # 创建并执行计划
-        plan = launcher.create_launch_plan(self.time_window, "balanced")
+        plan = launcher.create_launch_plan(self.time_window, self.launch_strategy)
         executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
         stats = executor.execute_plan(plan, self.time_window, segment_mode=self.segment_mode)
 
