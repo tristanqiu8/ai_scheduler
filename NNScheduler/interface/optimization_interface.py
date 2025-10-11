@@ -125,7 +125,8 @@ class OptimizationInterface:
             resources=resource_config,
             search_priority=search_priority,
             user_priority_config=user_priority_config,
-            launch_strategy=launch_strategy
+            launch_strategy=launch_strategy,
+            executor_mode=optimization_config.get("executor_mode", "time_plan")
         )
 
         # 设置日志级别
@@ -222,9 +223,18 @@ class OptimizationInterface:
             print(f"[WARN] 无效的launch_strategy: {launch_strategy}，已回退为balanced")
             launch_strategy = "balanced"
 
-        plan = launcher.create_launch_plan(time_window, launch_strategy)
-        executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
-        executor.execute_plan(plan, time_window, segment_mode=segment_mode)
+        # 执行器模式：默认 time_plan，支持 event（事件驱动验证版）
+        executor_mode = str(optimization_config.get("executor_mode", "time_plan")).strip().lower()
+        if executor_mode == "event":
+            from NNScheduler.core.executor_event_driven import EventDrivenExecutor
+            ev_exec = EventDrivenExecutor(queue_manager, tracer, launcher.tasks)
+            ev_exec.execute(time_window, segment_mode=segment_mode, launch_strategy=launch_strategy)
+            launch_events = ev_exec.launch_events
+        else:
+            plan = launcher.create_launch_plan(time_window, launch_strategy)
+            executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
+            executor.execute_plan(plan, time_window, segment_mode=segment_mode)
+            launch_events = plan.events
 
         # 恢复默认日志设置
         if log_level == "detailed":
@@ -290,7 +300,8 @@ class JsonPriorityOptimizer:
     """JSON版本的优先级优化器 - 与test_cam_auto_priority_optimization.py功能相同"""
 
     def __init__(self, tasks: List[NNTask], time_window=1000.0, segment_mode=True, resources=None,
-                 search_priority=True, user_priority_config=None, launch_strategy: str = "balanced"):
+                 search_priority=True, user_priority_config=None, launch_strategy: str = "balanced",
+                 executor_mode: str = "time_plan"):
         self.tasks = tasks
         self.time_window = time_window
         self.segment_mode = segment_mode
@@ -301,6 +312,8 @@ class JsonPriorityOptimizer:
         self.launch_strategy = str(launch_strategy).strip().lower()
         if self.launch_strategy not in {"eager", "lazy", "balanced"}:
             self.launch_strategy = "balanced"
+        # 执行器模式
+        self.executor_mode = str(executor_mode).strip().lower() if executor_mode else "time_plan"
 
         # 分析任务特征
         self.task_features = self._analyze_task_features()
@@ -453,14 +466,22 @@ class JsonPriorityOptimizer:
         for task in self.tasks:
             launcher.register_task(task)
 
-        # 创建并执行计划
-        plan = launcher.create_launch_plan(self.time_window, self.launch_strategy)
-        executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
-        stats = executor.execute_plan(plan, self.time_window, segment_mode=self.segment_mode)
+        # 执行计划或事件驱动
+        launch_events = []
+        if getattr(self, 'executor_mode', 'time_plan') == 'event':
+            from NNScheduler.core.executor_event_driven import EventDrivenExecutor
+            ev_exec = EventDrivenExecutor(queue_manager, tracer, launcher.tasks)
+            ev_exec.execute(self.time_window, segment_mode=self.segment_mode, launch_strategy=self.launch_strategy)
+            launch_events = ev_exec.launch_events
+        else:
+            plan = launcher.create_launch_plan(self.time_window, self.launch_strategy)
+            executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
+            executor.execute_plan(plan, self.time_window, segment_mode=self.segment_mode)
+            launch_events = plan.events
 
         # 评估性能
         evaluator = PerformanceEvaluator(tracer, launcher.tasks, queue_manager)
-        metrics = evaluator.evaluate(self.time_window, plan.events)
+        metrics = evaluator.evaluate(self.time_window, launch_events)
 
         # 收集详细分析数据
         fps_analysis, power_analysis, ddr_analysis = self._collect_detailed_analysis(evaluator)
