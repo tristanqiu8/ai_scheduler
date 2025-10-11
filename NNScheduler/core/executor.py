@@ -30,11 +30,12 @@ class TaskInstance:
     priority: TaskPriority = TaskPriority.NORMAL
     start_time: Optional[float] = None
     completion_time: Optional[float] = None
-    
+    dependencies_ready: bool = True
+
     # 新增：记录每个段的状态
     segment_enqueued: List[bool] = field(default_factory=list)
     segment_in_queue: Set[int] = field(default_factory=set)  # 当前在队列中的段
-    
+
     def __post_init__(self):
         # 初始化段状态
         self.segment_enqueued = [False] * len(self.segments)
@@ -57,15 +58,17 @@ class TaskInstance:
         """检查指定段是否可以入队"""
         if segment_index >= len(self.segments):
             return False
-        
+
         # 已经入队或在队列中的不能重复入队
         if self.segment_enqueued[segment_index] or segment_index in self.segment_in_queue:
             return False
-        
+
         # 第一个段总是可以入队
         if segment_index == 0:
+            if not self.dependencies_ready:
+                return False
             return True
-        
+
         # 后续段需要前一个段完成
         return (segment_index - 1) in self.completed_segments
     
@@ -106,11 +109,13 @@ class ScheduleExecutor:
         self.queue_manager = queue_manager
         self.tracer = tracer
         self.tasks = tasks
-        
+
         # 执行状态
         self.task_instances: Dict[Tuple[str, int], TaskInstance] = {}
         self.segment_completions: List[SegmentCompletion] = []
-        
+        self.completed_instances: Dict[Tuple[str, int], float] = {}
+        self.pending_dependency_instances: Set[Tuple[str, int]] = set()
+
         # 时间管理
         self.current_time = 0.0
         self.next_events: List[Tuple[float, str, any]] = []
@@ -162,9 +167,67 @@ class ScheduleExecutor:
         """重置执行器状态"""
         self.task_instances.clear()
         self.segment_completions.clear()
+        self.completed_instances.clear()
+        self.pending_dependency_instances.clear()
         self.current_time = 0.0
         self.next_events.clear()
         self.processed_segments.clear()
+
+    def _dependencies_satisfied(self, task: NNTask, instance_id: int) -> bool:
+        """检查给定任务实例的依赖是否完成"""
+        if not task.dependencies:
+            return True
+
+        for dep_id in task.dependencies:
+            dep_task = self.tasks.get(dep_id)
+            dep_instance = self._map_dependency_instance(task, dep_task, instance_id)
+            if (dep_id, dep_instance) not in self.completed_instances:
+                return False
+        return True
+
+    def _map_dependency_instance(self, task: NNTask, dep_task: Optional[NNTask], instance_id: int) -> int:
+        """根据帧率映射依赖实例编号"""
+        if dep_task is None:
+            return instance_id
+
+        dep_fps = getattr(dep_task, "fps_requirement", 0.0) or 0.0
+        task_fps = getattr(task, "fps_requirement", 0.0) or 0.0
+
+        if dep_fps <= 0 or task_fps <= 0:
+            return instance_id
+
+        if dep_fps < task_fps:
+            ratio = task_fps / dep_fps
+            if ratio > 0:
+                return int(instance_id / ratio)
+        return instance_id
+
+    def _register_instance_completion(self, instance: TaskInstance):
+        """记录任务实例完成并尝试释放依赖"""
+        completion_time = instance.completion_time if instance.completion_time is not None else self.current_time
+        key = (instance.task_id, instance.instance_id)
+        self.completed_instances[key] = completion_time
+
+    def _activate_pending_instances(self):
+        """检查等待依赖的实例，依赖满足后立即激活"""
+        if not self.pending_dependency_instances:
+            return
+
+        pending_keys = list(self.pending_dependency_instances)
+        for key in pending_keys:
+            instance = self.task_instances.get(key)
+            if not instance:
+                self.pending_dependency_instances.discard(key)
+                continue
+
+            task = self.tasks.get(instance.task_id)
+            if not task:
+                self.pending_dependency_instances.discard(key)
+                continue
+
+            if self._dependencies_satisfied(task, instance.instance_id):
+                instance.dependencies_ready = True
+                self.pending_dependency_instances.discard(key)
         
         # 重置资源队列
         for queue in self.queue_manager.resource_queues.values():
@@ -184,12 +247,12 @@ class ScheduleExecutor:
         """处理任务发射事件"""
         if event.task_id not in self.tasks:
             return
-        
+
         task = self.tasks[event.task_id]
-        
+
         # 应用分段策略
         segments = self._prepare_segments(task)
-        
+
         # 创建任务实例
         instance = TaskInstance(
             task_id=event.task_id,
@@ -198,9 +261,19 @@ class ScheduleExecutor:
             priority=task.priority,
             start_time=self.current_time
         )
-        
+
+        # 检查依赖是否满足
+        if task.dependencies:
+            if self._dependencies_satisfied(task, event.instance_id):
+                instance.dependencies_ready = True
+            else:
+                instance.dependencies_ready = False
+                self.pending_dependency_instances.add(instance.instance_key)
+        else:
+            instance.dependencies_ready = True
+
         self.task_instances[instance.instance_key] = instance
-        
+
         if ENABLE_EXECUTION_LOG:
             print(f"{self.current_time:>8.1f}ms: [LAUNCH] {event.task_id}#{event.instance_id} "
                   f"({len(segments)} segments, priority={task.priority.name})")
@@ -226,6 +299,10 @@ class ScheduleExecutor:
             if ENABLE_EXECUTION_LOG:
                 print(f"{completion.completion_time:>8.1f}ms: [TASK_COMPLETE] "
                       f"{completion.task_id}#{completion.instance_id}")
+
+            # 记录完成并尝试释放依赖
+            self._register_instance_completion(instance)
+            self._activate_pending_instances()
     
     def _schedule_segments_traditional(self):
         """传统模式调度：按顺序执行段"""
