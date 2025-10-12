@@ -16,7 +16,6 @@ except Exception:
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.patches import Rectangle
-import numpy as np
 
 from NNScheduler.core.schedule_tracer import ScheduleTracer, TaskExecution
 from NNScheduler.core.enums import TaskPriority, ResourceType

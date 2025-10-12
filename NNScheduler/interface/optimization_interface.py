@@ -6,7 +6,7 @@
 import json
 import time
 import random
-import numpy as np
+import os
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, asdict
 from collections import defaultdict
@@ -20,7 +20,6 @@ from NNScheduler.core.enums import ResourceType, TaskPriority, SegmentationStrat
 from NNScheduler.core.evaluator import PerformanceEvaluator
 from NNScheduler.core.task import NNTask
 from NNScheduler.scenario.camera_task import create_real_tasks
-from NNScheduler.viz.schedule_visualizer import ScheduleVisualizer
 from .json_interface import JsonInterface
 
 
@@ -167,9 +166,14 @@ class OptimizationInterface:
         }
 
         # 生成可视化文件
-        visualization_files = self._generate_visualizations(
-            tasks, best_config, resource_config, optimization_config, log_level
-        )
+        visualization_files = {}
+        disable_visuals = os.environ.get("AI_SCHEDULER_DISABLE_VISUALS", "").strip().lower()
+        if disable_visuals in {"1", "true", "yes"}:
+            print("[INFO] 可视化生成已通过环境变量 AI_SCHEDULER_DISABLE_VISUALS 禁用")
+        else:
+            visualization_files = self._generate_visualizations(
+                tasks, best_config, resource_config, optimization_config, log_level
+            )
         result["visualization_files"] = visualization_files
 
         # 保存结果
@@ -184,6 +188,11 @@ class OptimizationInterface:
     def _generate_visualizations(self, tasks: List[NNTask], best_config: Dict[str, TaskPriority],
                                resource_config: Dict[str, Any], optimization_config: Dict[str, Any], log_level: str = "normal") -> Dict[str, str]:
         """生成可视化文件"""
+        try:
+            from NNScheduler.viz.schedule_visualizer import ScheduleVisualizer
+        except Exception as exc:
+            print(f"[WARN] 可视化生成被跳过: {exc}")
+            return {}
         # 应用最佳配置
         for task in tasks:
             task.priority = best_config[task.task_id]

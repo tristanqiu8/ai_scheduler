@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Tuple, Set
 from dataclasses import dataclass, field
 from collections import defaultdict
 import json
+import statistics
 
 from .enums import TaskPriority, ResourceType
 from .task import NNTask
@@ -328,7 +329,7 @@ class PerformanceEvaluator:
         # 资源负载均衡度（标准差越小越均衡）
         if len(all_utils) > 1:
             utils = [m.utilization_rate for m in all_utils]
-            std_dev = np.std(utils)
+            std_dev = statistics.pstdev(utils) if len(utils) > 1 else 0.0
             # 归一化到0-1，标准差越小分数越高
             balance_score = max(0, 1 - (std_dev / 50.0))  # 假设50%是最大可接受的标准差
         else:
@@ -535,22 +536,3 @@ class PerformanceEvaluator:
                 }
             })
         return results
-
-
-# 导入numpy用于计算标准差
-try:
-    import numpy as np
-except ImportError:
-    # 如果没有numpy，提供简单的标准差计算
-    def calculate_std(values):
-        if not values:
-            return 0
-        mean = sum(values) / len(values)
-        variance = sum((x - mean) ** 2 for x in values) / len(values)
-        return variance ** 0.5
-    
-    # 替换numpy.std
-    class np:
-        @staticmethod
-        def std(values):
-            return calculate_std(values)
