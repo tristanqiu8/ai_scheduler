@@ -1,6 +1,5 @@
 __pycache__/
-*.png
-*.json
+artifacts_sim/
 *.txt
 .vscode/
 nul

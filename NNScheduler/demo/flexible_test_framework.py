@@ -14,6 +14,7 @@ from NNScheduler.core.schedule_tracer import ScheduleTracer
 from NNScheduler.core.enhanced_launcher import EnhancedTaskLauncher
 from NNScheduler.core.executor import ScheduleExecutor
 from NNScheduler.core.evaluator import PerformanceEvaluator
+from NNScheduler.core.artifacts import ensure_artifact_path, resolve_artifact_path
 from NNScheduler.core.enums import ResourceType
 from NNScheduler.viz.schedule_visualizer import ScheduleVisualizer
 
@@ -213,10 +214,11 @@ class SchedulingTestFramework:
         Args:
             output_dir: 输出目录
         """
-        os.makedirs(output_dir, exist_ok=True)
+        output_dir_path = resolve_artifact_path(output_dir)
+        output_dir_path.mkdir(parents=True, exist_ok=True)
         
-        print(f"\n[ANALYSIS] 生成可视化文件到 {output_dir}/")
-        
+        print(f"\n[ANALYSIS] 生成可视化文件到 {output_dir_path}/")
+
         for name, result in self.results.items():
             # 生成文件名（去除特殊字符）
             safe_name = name.replace(" ", "_").replace("×", "x").replace("+", "_")
@@ -224,18 +226,19 @@ class SchedulingTestFramework:
             visualizer = ScheduleVisualizer(result.tracer)
             
             # 生成PNG
-            png_file = os.path.join(output_dir, f"{safe_name}.png")
+            png_file = output_dir_path / f"{safe_name}.png"
             visualizer.plot_resource_timeline(png_file)
             
             # 生成Chrome Trace
-            json_file = os.path.join(output_dir, f"{safe_name}.json")
+            json_file = output_dir_path / f"{safe_name}.json"
             visualizer.export_chrome_tracing(json_file)
             
             print(f"  [OK] {name}: {safe_name}.png, {safe_name}.json")
     
     def export_comparison_report(self, filename: str = "comparison_report.txt"):
         """导出对比报告"""
-        with open(filename, 'w', encoding='utf-8') as f:
+        output_path = ensure_artifact_path(filename)
+        with open(output_path, 'w', encoding='utf-8') as f:
             f.write("调度系统对比测试报告\n")
             f.write("="*80 + "\n\n")
             
@@ -250,7 +253,7 @@ class SchedulingTestFramework:
                 for res_id, util in sorted(result.utilization.items()):
                     f.write(f"  {res_id}: {util:.1f}%\n")
         
-        print(f"\n📄 对比报告已保存到: {filename}")
+        print(f"\n📄 对比报告已保存到: {output_path}")
     
     def _calculate_system_utilization(self, tracer, window_size):
         """计算系统利用率"""

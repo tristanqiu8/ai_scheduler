@@ -5,16 +5,23 @@ Test fixtures and configuration
 
 import sys
 import os
+from pathlib import Path
 
 # 添加项目根目录到 Python 路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
+from NNScheduler.core.artifacts import get_artifacts_root
 from NNScheduler.core.resource_queue import ResourceQueueManager
 from NNScheduler.core.schedule_tracer import ScheduleTracer
 from NNScheduler.core.launcher import TaskLauncher
 from NNScheduler.core.enums import ResourceType, TaskPriority
 from NNScheduler.core.task import NNTask
+
+
+# 标准化所有测试输出目录
+ARTIFACTS_ROOT = get_artifacts_root().resolve()
+os.environ["AI_SCHEDULER_ARTIFACTS_DIR"] = str(ARTIFACTS_ROOT)
 
 
 @pytest.fixture

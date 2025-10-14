@@ -23,6 +23,7 @@ from NNScheduler.core import (
     PerformanceEvaluator, LaunchPlan,
     NNTask
 )
+from NNScheduler.core.artifacts import ensure_artifact_path
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -505,10 +506,11 @@ class AdvancedGeneticOptimizer:
         ax3.grid(True, alpha=0.3)
         
         plt.tight_layout()
-        plt.savefig("advanced_optimization_result.png", dpi=150, bbox_inches='tight')
+        output_path = ensure_artifact_path("advanced_optimization_result.png")
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
         plt.close()
-        
-        print("\n✅ 可视化已保存: advanced_optimization_result.png")
+
+        print(f"\n✅ 可视化已保存: {output_path}")
     
     def _plot_schedule(self, ax, tracer: ScheduleTracer, title: str):
         """绘制调度甘特图"""

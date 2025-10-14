@@ -8,6 +8,7 @@ from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import asdict
 from NNScheduler.core.models import ResourceSegment, CutPoint
 from NNScheduler.core.enums import ResourceType, TaskPriority, RuntimeType, SegmentationStrategy
+from NNScheduler.core.artifacts import ensure_artifact_path
 from NNScheduler.core.task import NNTask
 from NNScheduler.scenario.model_repo import get_model, list_models
 
@@ -243,8 +244,10 @@ class JsonInterface:
     @staticmethod
     def save_to_file(data: Dict[str, Any], filepath: str):
         """保存JSON配置到文件"""
-        with open(filepath, 'w', encoding='utf-8') as f:
+        output_path = ensure_artifact_path(filepath)
+        with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+        return output_path
     
     @staticmethod
     def get_available_models() -> List[str]:

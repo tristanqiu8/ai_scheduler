@@ -14,6 +14,7 @@ from .enums import TaskPriority, ResourceType
 from .task import NNTask
 from .schedule_tracer import ScheduleTracer, TaskExecution
 from .resource_queue import ResourceQueueManager
+from .artifacts import ensure_artifact_path
 
 
 @dataclass
@@ -449,8 +450,10 @@ class PerformanceEvaluator:
             "resource_metrics": self._serialize_resource_metrics()
         }
         
-        with open(filename, 'w', encoding='utf-8') as f:
+        output_path = ensure_artifact_path(filename)
+        with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
+        print(f"Performance report exported to: {output_path}")
     
     def _serialize_overall_metrics(self) -> Dict:
         """序列化整体指标"""

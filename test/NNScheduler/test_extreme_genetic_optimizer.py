@@ -23,6 +23,7 @@ from NNScheduler.core import (
     PerformanceEvaluator, LaunchPlan,
     NNTask
 )
+from NNScheduler.core.artifacts import ensure_artifact_path
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -667,11 +668,12 @@ def run_extreme_optimizer():
         ax2.set_yticks([])
         
         plt.tight_layout()
-        plt.savefig("extreme_optimization_result.png", dpi=150, bbox_inches='tight')
+        output_path = ensure_artifact_path("extreme_optimization_result.png")
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
         plt.close()
         
         print("\n✅ 可视化图表已生成:")
-        print("   - extreme_optimization_result.png (优化结果)")
+        print(f"   - {output_path} (优化结果)")
         
     except ImportError:
         print("\n[WARNING] matplotlib未安装，跳过图表生成")

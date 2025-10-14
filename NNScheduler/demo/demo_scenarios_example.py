@@ -9,6 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from NNScheduler.core.scheduling_config import SchedulingConfig, ScenarioType
 from NNScheduler.core.enums import ResourceType
+from NNScheduler.core.artifacts import ensure_artifact_path
 from flexible_test_framework import SchedulingTestFramework
 from demo_real_task_segmentation import prepare_tasks_with_segmentation
 
@@ -163,8 +164,9 @@ def test_bandwidth_sweep():
     plt.grid(True)
     
     plt.tight_layout()
-    plt.savefig('bandwidth_sweep_results.png')
-    print("\n[OK] 带宽扫描结果已保存到: bandwidth_sweep_results.png")
+    output_path = ensure_artifact_path('bandwidth_sweep_results.png')
+    plt.savefig(output_path)
+    print(f"\n[OK] 带宽扫描结果已保存到: {output_path}")
 
 
 def main():

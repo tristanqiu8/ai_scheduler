@@ -126,7 +126,7 @@ Maintainer: {__maintainer__} (Team: {__team__})
         abs_config_path = Path(config_path).resolve()
 
         # Set default output directory if not provided
-        output_dir = args.output if args.output else "./artifacts_pipe"
+        output_dir = args.output if args.output else "./artifacts_sim"
 
         # Run the optimization
         print(f"[INFO] Starting optimization with config: {abs_config_path}")

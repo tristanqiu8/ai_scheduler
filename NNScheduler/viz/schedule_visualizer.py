@@ -19,6 +19,7 @@ from matplotlib.patches import Rectangle
 
 from NNScheduler.core.schedule_tracer import ScheduleTracer, TaskExecution
 from NNScheduler.core.enums import TaskPriority, ResourceType
+from NNScheduler.core.artifacts import ensure_artifact_path
 
 
 class ScheduleVisualizer:
@@ -178,8 +179,10 @@ class ScheduleVisualizer:
                 }
                 chrome_events.append(marker)
         
+        output_path = ensure_artifact_path(filename)
+
         # 写入文件
-        with open(filename, 'w') as f:
+        with open(output_path, 'w') as f:
             json.dump({
                 "traceEvents": chrome_events,
                 "displayTimeUnit": "ms",
@@ -188,6 +191,7 @@ class ScheduleVisualizer:
                     "version": "AI Scheduler v1.0"
                 }
             }, f, indent=2)
+        print(f"Chrome tracing exported to: {output_path}")
     
     def plot_resource_timeline(self, filename: Optional[str] = None, 
                              figsize: tuple = (14, 8), dpi: int = 120):
@@ -299,8 +303,9 @@ class ScheduleVisualizer:
         
         # 保存或显示
         if filename:
-            plt.savefig(filename, dpi=dpi, bbox_inches='tight')
-            print(f"Timeline plot saved to: {filename}")
+            output_path = ensure_artifact_path(filename)
+            plt.savefig(output_path, dpi=dpi, bbox_inches='tight')
+            print(f"Timeline plot saved to: {output_path}")
         else:
             plt.show()
         

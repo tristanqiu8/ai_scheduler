@@ -46,18 +46,21 @@ except Exception as e:
 import json
 import time
 import argparse
+from pathlib import Path
 from NNScheduler.interface.optimization_interface import OptimizationInterface
+from NNScheduler.core.artifacts import get_artifacts_root, resolve_artifact_path
 
 
-def run_optimization_from_json(config_file: str, output_dir: str = "./artifacts_pipe"):
+def run_optimization_from_json(config_file: str, output_dir: str = "./artifacts_sim"):
     """从JSON文件运行优化并生成所有输出"""
 
-    # 创建输出目录
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-        print(f"[INFO] 创建输出目录: {output_dir}")
+    if output_dir:
+        artifacts_dir = resolve_artifact_path(output_dir)
     else:
-        print(f"[INFO] 使用输出目录: {output_dir}")
+        artifacts_dir = get_artifacts_root()
+
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    print(f"[INFO] 使用输出目录: {artifacts_dir}")
 
     # 处理配置文件路径，确保使用绝对路径
     if not os.path.isabs(config_file):
@@ -76,9 +79,9 @@ def run_optimization_from_json(config_file: str, output_dir: str = "./artifacts_
     optimizer_interface = OptimizationInterface()
 
     # 切换到输出目录执行优化，确保所有文件生成在指定目录
-    original_cwd = os.getcwd()
+    original_cwd = Path.cwd()
     try:
-        os.chdir(output_dir)
+        os.chdir(artifacts_dir)
         print(f"[INFO] 开始优化...")
         start_time = time.time()
 
@@ -137,22 +140,22 @@ def run_optimization_from_json(config_file: str, output_dir: str = "./artifacts_
     current_time = time.strftime('%Y%m%d')
 
     # 甘特图
-    timeline_files = glob.glob(os.path.join(output_dir, f"optimized_schedule_timeline_{current_time}_*.png"))
+    timeline_files = glob.glob(str(artifacts_dir / f"optimized_schedule_timeline_{current_time}_*.png"))
     if timeline_files:
         print(f"甘特图: {timeline_files[-1]}")  # 最新的文件
 
     # Chrome trace
-    trace_files = glob.glob(os.path.join(output_dir, f"optimized_schedule_chrome_trace_{current_time}_*.json"))
+    trace_files = glob.glob(str(artifacts_dir / f"optimized_schedule_chrome_trace_{current_time}_*.json"))
     if trace_files:
         print(f"Chrome trace: {trace_files[-1]}")  # 最新的文件
 
     # 最优配置
-    config_files = glob.glob(os.path.join(output_dir, f"optimized_priority_config_{current_time}_*.json"))
+    config_files = glob.glob(str(artifacts_dir / f"optimized_priority_config_{current_time}_*.json"))
     if config_files:
         print(f"最优配置: {config_files[-1]}")  # 最新的文件
 
     # 详细结果
-    result_files = glob.glob(os.path.join(output_dir, f"optimization_result_{current_time}_*.json"))
+    result_files = glob.glob(str(artifacts_dir / f"optimization_result_{current_time}_*.json"))
     if result_files:
         print(f"详细结果: {result_files[-1]}")  # 最新的文件
 
@@ -183,8 +186,8 @@ if __name__ == "__main__":
 
     parser.add_argument(
         '--out',
-        default='./artifacts_pipe',
-        help='输出文件目录路径 (默认: ./artifacts_pipe)'
+        default='./artifacts_sim',
+        help='输出文件目录路径 (默认: ./artifacts_sim)'
     )
 
     args = parser.parse_args()

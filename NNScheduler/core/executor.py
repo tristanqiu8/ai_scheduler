@@ -228,10 +228,6 @@ class ScheduleExecutor:
             if self._dependencies_satisfied(task, instance.instance_id):
                 instance.dependencies_ready = True
                 self.pending_dependency_instances.discard(key)
-        
-        # 重置资源队列
-        for queue in self.queue_manager.resource_queues.values():
-            queue.clear()
     
     def _process_events(self, use_segment_mode: bool):
         """处理当前时间的所有事件"""

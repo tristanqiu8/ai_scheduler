@@ -19,6 +19,7 @@ import pytest
 from test_cam_auto_priority_optimization import PriorityOptimizer
 from NNScheduler.scenario.camera_task import create_real_tasks
 from NNScheduler.core.executor import set_execution_log_enabled
+from NNScheduler.core.artifacts import ensure_artifact_path
 
 # 导入JSON API优化器
 from NNScheduler.interface.optimization_interface import OptimizationInterface, JsonPriorityOptimizer
@@ -341,7 +342,9 @@ def test_optimization_comparison():
             'test_duration': time.time() - start_time
         }
 
-        comparison_file = f"optimization_comparison_result_{time.strftime('%Y%m%d_%H%M%S')}.json"
+        comparison_file = ensure_artifact_path(
+            f"optimization_comparison_result_{time.strftime('%Y%m%d_%H%M%S')}.json"
+        )
         with open(comparison_file, 'w', encoding='utf-8') as f:
             json.dump(comparison_result, f, indent=2, ensure_ascii=False, default=str)
 

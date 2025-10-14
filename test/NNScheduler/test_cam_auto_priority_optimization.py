@@ -16,6 +16,7 @@ from NNScheduler.core.enhanced_launcher import EnhancedTaskLauncher
 from NNScheduler.core.executor import ScheduleExecutor, set_execution_log_enabled
 from NNScheduler.core.enums import ResourceType, TaskPriority, SegmentationStrategy
 from NNScheduler.core.evaluator import PerformanceEvaluator
+from NNScheduler.core.artifacts import ensure_artifact_path
 from NNScheduler.scenario.camera_task import create_real_tasks
 import numpy as np
 import random
@@ -449,7 +450,9 @@ class PriorityOptimizer:
             'latency_satisfaction': result.latency_satisfaction
         }
         
-        filename = f"optimized_priority_config_{time.strftime('%Y%m%d_%H%M%S')}.json"
+        filename = ensure_artifact_path(
+            f"optimized_priority_config_{time.strftime('%Y%m%d_%H%M%S')}.json"
+        )
         with open(filename, 'w') as f:
             json.dump(output, f, indent=2)
         
