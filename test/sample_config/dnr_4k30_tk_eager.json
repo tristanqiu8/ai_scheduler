@@ -83,7 +83,7 @@
         "segmentation_strategy": "NO_SEGMENTATION",
         "fps": 30.0,
         "latency": 33.3,
-        "dependencies": ["T2"],
+        "dependencies": ["T7"],
         "model": {
           "segments": [
             {"resource_type": "DSP", "duration_table": {"80": 0.754}, "segment_id": "dsp_sub0", "power": 0.0, "ddr": 1.988},

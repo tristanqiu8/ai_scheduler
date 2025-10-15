@@ -9,7 +9,7 @@ import math
 import uuid
 import importlib
 from pathlib import Path
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Tuple
 from dataclasses import dataclass
 import matplotlib
 # 使用非交互后端以支持无GUI环境（如CI/服务器）
@@ -211,7 +211,7 @@ class ScheduleVisualizer:
         
         # 为所有资源分配线程ID
         resource_tid_map = self._create_resource_tid_map(all_resources)
-        task_summaries = self.tracer.get_task_latency_summary()
+        task_summaries = self.tracer.get_task_latency_summary() or {}
         
         # 添加进程和线程元数据
         chrome_events.append({
@@ -451,8 +451,15 @@ class ScheduleVisualizer:
                 }
             }, f, indent=2)
         print(f"Chrome tracing exported to: {output_path}")
-        
-        # Skip Perfetto export for now to avoid dependency warnings
+
+        perfetto_builder = self._build_perfetto_trace(task_summaries)
+        perfetto_pb_path, perfetto_json_path = self._export_perfetto_trace(
+            output_path, task_summaries, builder=perfetto_builder
+        )
+        if perfetto_pb_path:
+            print(f"Perfetto trace exported to: {perfetto_pb_path}")
+        if perfetto_json_path:
+            print(f"Perfetto trace (JSON) exported to: {perfetto_json_path}")
     
     def plot_resource_timeline(self, filename: Optional[str] = None, 
                              figsize: tuple = (14, 8), dpi: int = 120):
@@ -619,13 +626,11 @@ class ScheduleVisualizer:
             return resource_type[:1].upper() if resource_type else "="
         return RESOURCE_MARKERS.get(resource_type, "=")
     
-    def _export_perfetto_trace(self, json_output_path: Path, task_summaries: Dict[str, Dict[str, Any]]) -> Optional[Path]:
-        """使用Perfetto库导出更丰富的trace，若库不可用则忽略"""
+    def _build_perfetto_trace(self, task_summaries: Dict[str, Dict[str, Any]]) -> Optional["_PerfettoTraceBuilder"]:
         builder = _PerfettoTraceBuilder()
         if not builder.available:
-            print("[WARN] Perfetto trace protobufs未找到，跳过 .pftrace 导出。")
             return None
-        
+
         timeline = self.tracer.get_timeline()
         
         for resource_id, executions in timeline.items():
@@ -680,10 +685,45 @@ class ScheduleVisualizer:
                         "hex_color": color_hex
                     }
                 )
-        
+
+        return builder
+
+    def _export_perfetto_trace(
+        self,
+        json_output_path: Path,
+        task_summaries: Dict[str, Dict[str, Any]],
+        builder: Optional["_PerfettoTraceBuilder"] = None
+    ) -> Tuple[Optional[Path], Optional[Path]]:
+        """使用Perfetto库导出trace，返回二进制与JSON路径"""
+        if builder is None:
+            builder = self._build_perfetto_trace(task_summaries)
+
+        if builder is None or not builder.available:
+            print("[WARN] Perfetto trace protobufs未找到，跳过 Perfetto 格式导出。")
+            return None, None
+
         perfetto_path = json_output_path.with_suffix(".pftrace")
         builder.serialize(perfetto_path)
-        return perfetto_path
+
+        json_path: Optional[Path] = None
+        try:
+            from google.protobuf import json_format
+
+            trace_msg = builder.get_trace_message()
+            if trace_msg is not None:
+                json_path = json_output_path.with_suffix(".perfetto.json")
+                trace_dict = json_format.MessageToDict(
+                    trace_msg, preserving_proto_field_name=True
+                )
+                with json_path.open("w", encoding="utf-8") as fp:
+                    json.dump(trace_dict, fp, ensure_ascii=False, indent=2)
+        except ImportError:
+            print("[WARN] google.protobuf.json_format 不可用，跳过 Perfetto JSON 导出。")
+        except Exception as exc:
+            print(f"[WARN] Perfetto JSON 导出失败: {exc}")
+            json_path = None
+
+        return perfetto_path, json_path
     
     def export_summary_report(self, filename: str):
         """导出详细的调度报告"""
@@ -1002,3 +1042,7 @@ class _PerfettoTraceBuilder:
             if name in self.track_event_type_values:
                 return self.track_event_type_values[name]
         return None
+
+    def get_trace_message(self):
+        """返回内部构建完成的Trace消息"""
+        return self.trace
