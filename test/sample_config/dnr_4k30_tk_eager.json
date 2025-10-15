@@ -1,8 +1,8 @@
 {
   "optimization": {
-    "max_iterations": 20,
+    "max_iterations": 30,
     "max_time_seconds": 120,
-    "target_satisfaction": 0.85,
+    "target_satisfaction": 0.90,
     "time_window": 200.0,
     "segment_mode": true,
     "enable_detailed_analysis": true,
@@ -131,6 +131,7 @@
         "segmentation_strategy": "NO_SEGMENTATION",
         "fps": 30.0,
         "latency": 33.3,
+        "dependencies": ["T2"],
         "model": {
           "segments": [
             {"resource_type": "NPU", "duration_table": {"80": 0.998}, "segment_id": "main", "power": 0.0, "ddr": 2.02}
@@ -145,6 +146,7 @@
         "segmentation_strategy": "NO_SEGMENTATION",
         "fps": 30.0,
         "latency": 33.3,
+        "dependencies": ["T2"],
         "model": {
           "segments": [
             {"resource_type": "NPU", "duration_table": {"80": 1.044}, "segment_id": "main", "power": 0.0, "ddr": 2.497}

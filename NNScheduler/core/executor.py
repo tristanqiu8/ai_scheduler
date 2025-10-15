@@ -338,6 +338,9 @@ class ScheduleExecutor:
         if not queue:
             return
         
+        task_def = self.tasks.get(instance.task_id)
+        task_name = task_def.name if task_def else None
+
         # 加入队列
         queue.enqueue(
             segment_id,
@@ -356,7 +359,11 @@ class ScheduleExecutor:
             queue.resource_id,
             instance.priority,
             self.current_time,
-            [segment]
+            [segment],
+            original_task_id=instance.task_id,
+            task_name=task_name,
+            instance_id=instance.instance_id,
+            segment_index=segment_index
         )
         
         if ENABLE_EXECUTION_LOG:
@@ -379,6 +386,38 @@ class ScheduleExecutor:
         if not segment:
             return
         
+        full_task_id = queued_task.task_id
+        task_instance_part = full_task_id
+        segment_index = 0
+        if "_seg" in full_task_id:
+            prefix, suffix = full_task_id.split("_seg", 1)
+            task_instance_part = prefix
+            digits = ""
+            for ch in suffix:
+                if ch.isdigit():
+                    digits += ch
+                else:
+                    break
+            if digits:
+                segment_index = int(digits)
+        
+        task_id = task_instance_part
+        instance_id = 0
+        if "#" in task_instance_part:
+            parts = task_instance_part.split("#", 1)
+            task_id = parts[0]
+            digits = ""
+            for ch in parts[1]:
+                if ch.isdigit():
+                    digits += ch
+                else:
+                    break
+            if digits:
+                instance_id = int(digits)
+        
+        task_def = self.tasks.get(task_id)
+        task_name = task_def.name if task_def else None
+        
         # 执行任务
         end_time = queue.execute_task(queued_task, self.current_time)
         
@@ -389,17 +428,12 @@ class ScheduleExecutor:
             self.current_time,
             end_time,
             queue.bandwidth,
-            segment.sub_id
+            segment.sub_id,
+            original_task_id=task_id,
+            task_name=task_name,
+            instance_id=instance_id,
+            segment_index=segment_index
         )
-        
-        # 解析任务信息
-        parts = queued_task.task_id.split('_seg')
-        task_instance_part = parts[0]
-        segment_index = int(parts[1]) if len(parts) > 1 else 0
-        
-        task_id_parts = task_instance_part.split('#')
-        task_id = task_id_parts[0]
-        instance_id = int(task_id_parts[1]) if len(task_id_parts) > 1 else 0
         
         if ENABLE_EXECUTION_LOG:
             print(f"{self.current_time:>8.1f}ms: [EXECUTE] {queued_task.task_id} on {queue.resource_id} "

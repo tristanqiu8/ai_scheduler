@@ -5,6 +5,10 @@
 """
 
 import json
+import math
+import uuid
+import importlib
+from pathlib import Path
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
 import matplotlib
@@ -16,10 +20,40 @@ except Exception:
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.patches import Rectangle
+from google.protobuf import descriptor_pb2, message_factory
+from google.protobuf.descriptor_pool import DescriptorPool
 
 from NNScheduler.core.schedule_tracer import ScheduleTracer, TaskExecution
 from NNScheduler.core.enums import TaskPriority, ResourceType
 from NNScheduler.core.artifacts import ensure_artifact_path
+
+
+PRIORITY_HEX_COLORS = {
+    TaskPriority.CRITICAL: "#FF8A80",  # 轻柔红
+    TaskPriority.HIGH: "#FFE082",      # 粉柔黄
+    TaskPriority.NORMAL: "#90CAF9",    # 天空蓝
+    TaskPriority.LOW: "#A5D6A7",       # 薄荷绿
+}
+
+PRIORITY_CHROME_COLORS = {
+    TaskPriority.CRITICAL: "bad",
+    TaskPriority.HIGH: "rail_load",
+    TaskPriority.NORMAL: "rail_response",
+    TaskPriority.LOW: "good",
+}
+
+RESOURCE_MARKERS = {
+    ResourceType.NPU: "N",
+    ResourceType.DSP: "D",
+    ResourceType.ISP: "I",
+    ResourceType.CPU: "C",
+    ResourceType.GPU: "G",
+    ResourceType.VPU: "V",
+    ResourceType.FPGA: "F",
+}
+
+# Timeline padding reserved for labels in textual view
+TEXT_TIMELINE_PADDING = 13
 
 
 class ScheduleVisualizer:
@@ -51,9 +85,10 @@ class ScheduleVisualizer:
         print("="*width)
         
         # 打印时间标尺
+        timeline_width = max(width - TEXT_TIMELINE_PADDING, 10)
         print(f"{'Resource':<12} ", end="")
-        for i in range(0, width-13, 10):
-            time_point = (i / (width-13)) * total_duration
+        for i in range(0, timeline_width, 10):
+            time_point = (i / timeline_width) * total_duration
             print(f"{time_point:>9.1f}", end=" ")
         print()
         print("-"*width)
@@ -63,19 +98,19 @@ class ScheduleVisualizer:
             print(f"{resource_id:<12} ", end="")
             
             # 创建时间线字符串
-            timeline_str = [" "] * (width - 13)
+            timeline_str = [" "] * timeline_width
             
             # 填充执行的任务
             if resource_id in timeline:
                 for execution in timeline[resource_id]:
-                    start_pos = int((execution.start_time - start_time) / total_duration * (width - 13))
-                    end_pos = int((execution.end_time - start_time) / total_duration * (width - 13))
+                    start_pos = int((execution.start_time - start_time) / total_duration * timeline_width)
+                    end_pos = int((execution.end_time - start_time) / total_duration * timeline_width)
                     
                     # 根据优先级选择字符
                     char = self._get_priority_char(execution.priority)
                     
                     # 填充执行区间
-                    for i in range(start_pos, min(end_pos + 1, width - 13)):
+                    for i in range(start_pos, min(end_pos + 1, timeline_width)):
                         if 0 <= i < len(timeline_str):
                             timeline_str[i] = char
             
@@ -91,16 +126,88 @@ class ScheduleVisualizer:
             util = utilization.get(resource_id, 0.0)
             status = "IDLE" if util == 0 else f"{util:.1f}%"
             print(f"  {resource_id}: {status}")
+        
+        # 打印任务流水线视图
+        print("\nTask Latency Timeline:")
+        print("-"*width)
+        self._print_task_latency_timeline(timeline_width, start_time, end_time)
     
+    def _print_task_latency_timeline(self, timeline_width: int, global_start: float, global_end: float):
+        """打印任务级流水线视图"""
+        summaries = self.tracer.get_task_latency_summary()
+        if not summaries:
+            print("  No task executions recorded")
+            return
+        
+        total_duration = global_end - global_start
+        if total_duration <= 0:
+            print("  Invalid global duration for task timeline")
+            return
+        
+        header = f"{'Task':<24} {'Start(ms)':>10} {'End(ms)':>10} {'Latency(ms)':>12} {'Priority':>10} {'Segs':>6}"
+        print(header)
+        timeline_indent = 25  # 24 chars for task label + single space separator
+        print(" " * timeline_indent + "-" * timeline_width)
+        
+        for _, summary in sorted(summaries.items(), key=lambda item: (item[1]["first_start"], item[1]["task_id"])):
+            start = summary["first_start"]
+            end = summary["last_end"]
+            latency = summary["latency"]
+            priority_obj = summary.get("priority")
+            priority = priority_obj.name if priority_obj else "UNKNOWN"
+            segment_count = summary.get("segment_count", 0)
+            display_name = summary.get("display_name") or summary.get("task_id", "UNKNOWN")
+            
+            print(f"{display_name:<24} {start:>10.2f} {end:>10.2f} {latency:>12.2f} {priority:>10} {segment_count:>6}")
+            
+            timeline_line = [" "] * timeline_width
+            latency_start_idx = int((start - global_start) / total_duration * timeline_width)
+            latency_end_idx = int(math.ceil((end - global_start) / total_duration * timeline_width))
+            latency_start_idx = max(0, min(latency_start_idx, timeline_width - 1))
+            latency_end_idx = max(latency_start_idx + 1, min(latency_end_idx, timeline_width))
+            
+            for idx in range(latency_start_idx, latency_end_idx):
+                if 0 <= idx < timeline_width and timeline_line[idx] == " ":
+                    timeline_line[idx] = "."
+            
+            first_segment_idx = latency_start_idx
+            segments = summary.get("segments", [])
+            for segment in segments:
+                seg_start_idx = int((segment["start"] - global_start) / total_duration * timeline_width)
+                seg_end_idx = int(math.ceil((segment["end"] - global_start) / total_duration * timeline_width))
+                seg_start_idx = max(0, min(seg_start_idx, timeline_width - 1))
+                seg_end_idx = max(seg_start_idx + 1, min(seg_end_idx, timeline_width))
+                marker = self._get_resource_marker(segment.get("resource_type"))
+                
+                for idx in range(seg_start_idx, seg_end_idx):
+                    if 0 <= idx < timeline_width:
+                        timeline_line[idx] = marker
+                
+                if segment.get("is_first_segment"):
+                    first_segment_idx = seg_start_idx
+            
+            pointer_line = [" "] * timeline_width
+            if 0 <= first_segment_idx < timeline_width:
+                pointer_line[first_segment_idx] = "^"
+            
+            print(" " * timeline_indent + "".join(timeline_line))
+            print(" " * timeline_indent + "".join(pointer_line))
+            gaps = summary.get("gaps", [])
+            if gaps:
+                gap_desc = ", ".join(f"{gap['duration']:.2f}ms idle" for gap in gaps)
+                print(" " * timeline_indent + f"gaps: {gap_desc}")
+            print()
+
     def export_chrome_tracing(self, filename: str):
         """导出Chrome Tracing格式的JSON文件（改进版）"""
-        chrome_events = []
+        chrome_events: List[Dict[str, Any]] = []
         
         # 获取所有资源
         all_resources = self._get_all_resources()
         
         # 为所有资源分配线程ID
         resource_tid_map = self._create_resource_tid_map(all_resources)
+        task_summaries = self.tracer.get_task_latency_summary()
         
         # 添加进程和线程元数据
         # 进程名称
@@ -139,6 +246,8 @@ class ScheduleVisualizer:
         # 转换执行记录为Chrome格式
         for execution in self.tracer.executions:
             tid = resource_tid_map.get(execution.resource_id, 0)
+            priority_hex = PRIORITY_HEX_COLORS.get(execution.priority)
+            priority_argb = _hex_to_argb(priority_hex)
             
             # 主事件（完整持续时间）
             event = {
@@ -154,7 +263,8 @@ class ScheduleVisualizer:
                     "priority": execution.priority.name,
                     "bandwidth": execution.bandwidth,
                     "segment": execution.segment_id or "main",
-                    "duration_ms": execution.duration
+                    "duration_ms": execution.duration,
+                    "hex_color": priority_hex
                 }
             }
             
@@ -162,6 +272,8 @@ class ScheduleVisualizer:
             color = self._get_priority_color(execution.priority)
             if color:
                 event["cname"] = color
+            if priority_argb is not None:
+                event["color"] = priority_argb
             
             chrome_events.append(event)
             
@@ -177,7 +289,91 @@ class ScheduleVisualizer:
                     "s": "t",  # Thread scope
                     "cname": "bad"
                 }
+                if priority_argb is not None:
+                    marker["color"] = priority_argb
                 chrome_events.append(marker)
+        
+        # 为每个任务创建独立线程，展示端到端时延
+        if task_summaries:
+            start_tid = (max(resource_tid_map.values()) if resource_tid_map else 0) + 1
+            sort_base = len(resource_tid_map) + 1
+            for offset, summary in enumerate(sorted(task_summaries.values(), key=lambda item: (item["first_start"], item["task_id"]))):
+                display_name = summary.get("display_name") or summary.get("task_id")
+                priority: TaskPriority = summary.get("priority", TaskPriority.NORMAL)
+                tid = start_tid + offset
+                sort_index = sort_base + offset
+                priority_hex = PRIORITY_HEX_COLORS.get(priority)
+                priority_argb = _hex_to_argb(priority_hex)
+                
+                chrome_events.append({
+                    "name": "thread_name",
+                    "ph": "M",
+                    "pid": 0,
+                    "tid": tid,
+                    "args": {
+                        "name": display_name
+                    }
+                })
+                chrome_events.append({
+                    "name": "thread_sort_index",
+                    "ph": "M",
+                    "pid": 0,
+                    "tid": tid,
+                    "args": {
+                        "sort_index": sort_index
+                    }
+                })
+                
+                latency_duration_us = max(summary["latency"], 0.0) * 1000
+                task_event = {
+                    "name": display_name,
+                    "cat": "TaskLatency",
+                    "ph": "X",
+                    "ts": summary["first_start"] * 1000,
+                    "dur": max(latency_duration_us, 1.0),
+                    "pid": 0,
+                    "tid": tid,
+                    "args": {
+                        "task_id": summary.get("task_id"),
+                        "task_name": summary.get("task_name"),
+                        "instance_id": summary.get("instance_id"),
+                        "priority": priority.name,
+                        "latency_ms": summary.get("latency"),
+                        "segment_count": summary.get("segment_count"),
+                        "first_resource": summary.get("first_resource_id"),
+                        "first_segment_id": summary.get("first_segment_id"),
+                        "gaps": summary.get("gaps"),
+                        "hex_color": priority_hex,
+                    }
+                }
+                color = self._get_priority_color(priority)
+                if color:
+                    task_event["cname"] = color
+                if priority_argb is not None:
+                    task_event["color"] = priority_argb
+                chrome_events.append(task_event)
+                
+                highlight_event = {
+                    "name": "dispatch",
+                    "cat": "TaskDispatch",
+                    "ph": "i",
+                    "ts": summary["first_start"] * 1000,
+                    "pid": 0,
+                    "tid": tid,
+                    "s": "p",
+                    "args": {
+                        "task_id": summary.get("task_id"),
+                        "first_resource": summary.get("first_resource_id"),
+                        "first_segment_id": summary.get("first_segment_id"),
+                        "priority": priority.name,
+                        "hex_color": priority_hex
+                    }
+                }
+                if color:
+                    highlight_event["cname"] = color
+                if priority_argb is not None:
+                    highlight_event["color"] = priority_argb
+                chrome_events.append(highlight_event)
         
         output_path = ensure_artifact_path(filename)
 
@@ -192,6 +388,10 @@ class ScheduleVisualizer:
                 }
             }, f, indent=2)
         print(f"Chrome tracing exported to: {output_path}")
+        
+        perfetto_path = self._export_perfetto_trace(output_path, task_summaries)
+        if perfetto_path:
+            print(f"Perfetto trace exported to: {perfetto_path}")
     
     def plot_resource_timeline(self, filename: Optional[str] = None, 
                              figsize: tuple = (14, 8), dpi: int = 120):
@@ -214,19 +414,14 @@ class ScheduleVisualizer:
         ax.tick_params(axis='y', labelsize=10)
         
         # 颜色映射
-        priority_colors = {
-            TaskPriority.CRITICAL: '#FF4444',
-            TaskPriority.HIGH: '#FF8844', 
-            TaskPriority.NORMAL: '#4488FF',
-            TaskPriority.LOW: '#888888'
-        }
+        priority_colors = PRIORITY_HEX_COLORS
         
         # 绘制任务块
         for resource_id, executions in timeline.items():
             y_pos = y_positions[resource_id]
             
             for exec in executions:
-                color = priority_colors.get(exec.priority, '#4488FF')
+                color = priority_colors.get(exec.priority, '#1E88E5')
                 
                 # 创建矩形
                 rect = Rectangle(
@@ -354,15 +549,85 @@ class ScheduleVisualizer:
         return mapping.get(priority, "?")
     
     def _get_priority_color(self, priority: TaskPriority) -> Optional[str]:
-        """根据优先级返回Chrome Tracing颜色"""
-        # Chrome Tracing预定义颜色
-        color_mapping = {
-            TaskPriority.CRITICAL: "terrible",     # 红色
-            TaskPriority.HIGH: "bad",             # 橙色
-            TaskPriority.NORMAL: "good",          # 蓝色
-            TaskPriority.LOW: "generic_work"      # 灰色
-        }
-        return color_mapping.get(priority)
+        """根据优先级返回Chrome/Perfetto调色板名"""
+        return PRIORITY_CHROME_COLORS.get(priority)
+    
+    def _get_resource_marker(self, resource_type: Optional[ResourceType]) -> str:
+        """根据资源类型返回文本流水线标记"""
+        if resource_type is None:
+            return "="
+        if isinstance(resource_type, str):
+            for rt, marker in RESOURCE_MARKERS.items():
+                if resource_type == rt.value or resource_type == rt.name:
+                    return marker
+            return resource_type[:1].upper() if resource_type else "="
+        return RESOURCE_MARKERS.get(resource_type, "=")
+    
+    def _export_perfetto_trace(self, json_output_path: Path, task_summaries: Dict[str, Dict[str, Any]]) -> Optional[Path]:
+        """使用Perfetto库导出更丰富的trace，若库不可用则忽略"""
+        builder = _PerfettoTraceBuilder()
+        if not builder.available:
+            print("[WARN] Perfetto trace protobufs未找到，跳过 .pftrace 导出。")
+            return None
+        
+        timeline = self.tracer.get_timeline()
+        
+        for resource_id, executions in timeline.items():
+            track_uuid = builder.add_track(resource_id, hex_color=None)
+            for execution in executions:
+                builder.add_slice(
+                    track_uuid=track_uuid,
+                    name=execution.task_id,
+                    category=execution.priority.name,
+                    start_ms=execution.start_time,
+                    duration_ms=execution.duration,
+                    hex_color=PRIORITY_HEX_COLORS.get(execution.priority)
+                )
+        
+        if task_summaries:
+            for summary in sorted(task_summaries.values(), key=lambda item: (item["first_start"], item["task_id"])):
+                display_name = summary.get("display_name") or summary.get("task_id")
+                priority: TaskPriority = summary.get("priority", TaskPriority.NORMAL)
+                color_hex = PRIORITY_HEX_COLORS.get(priority)
+                track_uuid = builder.add_track(display_name, hex_color=color_hex)
+                
+                latency_ms = max(summary["latency"], 0.0)
+                builder.add_slice(
+                    track_uuid=track_uuid,
+                    name=display_name,
+                    category="TaskLatency",
+                    start_ms=summary["first_start"],
+                    duration_ms=max(latency_ms, 0.001),
+                    hex_color=color_hex,
+                    annotations={
+                        "task_id": summary.get("task_id"),
+                        "task_name": summary.get("task_name"),
+                        "instance_id": summary.get("instance_id"),
+                        "segment_count": summary.get("segment_count"),
+                        "priority": priority.name,
+                        "latency_ms": latency_ms,
+                        "hex_color": color_hex
+                    }
+                )
+                
+                builder.add_instant(
+                    track_uuid=track_uuid,
+                    name="dispatch",
+                    category="TaskDispatch",
+                    timestamp_ms=summary["first_start"],
+                    hex_color=color_hex,
+                    annotations={
+                        "task_id": summary.get("task_id"),
+                        "first_resource": summary.get("first_resource_id"),
+                        "first_segment_id": summary.get("first_segment_id"),
+                        "priority": priority.name,
+                        "hex_color": color_hex
+                    }
+                )
+        
+        perfetto_path = json_output_path.with_suffix(".pftrace")
+        builder.serialize(perfetto_path)
+        return perfetto_path
     
     def export_summary_report(self, filename: str):
         """导出详细的调度报告"""
@@ -404,3 +669,251 @@ class ScheduleVisualizer:
                     f.write("  No tasks executed\n")
         
         print(f"Summary report saved to: {filename}")
+
+
+def _ms_to_ns(value_ms: float) -> int:
+    """Convert milliseconds to nanoseconds with rounding."""
+    return int(round(value_ms * 1_000_000))
+
+
+def _hex_to_argb(hex_color: Optional[str]) -> Optional[int]:
+    if not hex_color:
+        return None
+    value = hex_color.lstrip("#")
+    if len(value) == 6:
+        return (0xFF << 24) | int(value, 16)
+    if len(value) == 8:
+        return int(value, 16)
+    return None
+
+
+class _PerfettoTraceBuilder:
+    """Lightweight helper wrapping Perfetto trace protobuf APIs (optional)."""
+
+    def __init__(self):
+        self.available = False
+        self.trace = None
+        self.track_event_type_values: Dict[str, int] = {}
+
+        try:
+            platform_mod = importlib.import_module("perfetto.trace_processor.platform")
+        except ImportError:
+            return
+
+        delegate_cls = getattr(platform_mod, "PlatformDelegate", None)
+        if delegate_cls is None:
+            return
+
+        try:
+            descriptor_bytes = delegate_cls().get_resource("trace_processor.descriptor")
+        except Exception:
+            return
+
+        file_set = descriptor_pb2.FileDescriptorSet()
+        try:
+            file_set.MergeFromString(descriptor_bytes)
+        except Exception:
+            return
+
+        pool = DescriptorPool()
+        for file_desc in file_set.file:
+            try:
+                pool.Add(file_desc)
+            except Exception:
+                continue
+
+        factory = message_factory.MessageFactory(pool)
+
+        def _resolve(name: str):
+            try:
+                desc = pool.FindMessageTypeByName(name)
+            except KeyError:
+                return None
+            return factory.GetPrototype(desc)
+
+        self.Trace = _resolve("perfetto.protos.Trace")
+        self.TracePacket = _resolve("perfetto.protos.TracePacket")
+        self.TrackDescriptor = _resolve("perfetto.protos.TrackDescriptor")
+        self.TrackEvent = _resolve("perfetto.protos.TrackEvent")
+
+        if not all([self.Trace, self.TracePacket, self.TrackDescriptor, self.TrackEvent]):
+            return
+
+        track_event_desc = self.TrackEvent.DESCRIPTOR
+        track_event_type = track_event_desc.enum_types_by_name.get("Type") if track_event_desc else None
+        if track_event_type:
+            self.track_event_type_values = {
+                value.name: value.number for value in track_event_type.values
+            }
+
+        self.trace = self.Trace()
+        self.available = True
+
+    def add_track(self, name: str, hex_color: Optional[str] = None) -> int:
+        if not self.available or self.trace is None:
+            return 0
+        track_uuid = self._generate_uuid()
+        packet = self.trace.packet.add()
+        descriptor = packet.track_descriptor
+        descriptor.name = name
+        descriptor.uuid = track_uuid
+        self._apply_color(descriptor, hex_color)
+        return track_uuid
+
+    def add_slice(
+        self,
+        track_uuid: int,
+        name: str,
+        category: Optional[str],
+        start_ms: float,
+        duration_ms: float,
+        hex_color: Optional[str] = None,
+        annotations: Optional[Dict[str, Any]] = None,
+    ):
+        if not self.available or self.trace is None:
+            return
+        event = self._new_event(track_uuid, start_ms)
+        slice_type = self._get_type(["TYPE_SLICE", "TYPE_COMPLETE", "TYPE_SLICE_BEGIN"])
+        if slice_type is not None:
+            event.type = slice_type
+        if hasattr(event, "name"):
+            event.name = name
+        self._append_category(event, category)
+        self._set_slice_info(event, name, category, duration_ms)
+        self._apply_duration(event, duration_ms)
+        self._apply_color(event, hex_color)
+        self._attach_annotations(event, annotations)
+
+    def add_instant(
+        self,
+        track_uuid: int,
+        name: str,
+        category: Optional[str],
+        timestamp_ms: float,
+        hex_color: Optional[str] = None,
+        annotations: Optional[Dict[str, Any]] = None,
+    ):
+        if not self.available or self.trace is None:
+            return
+        event = self._new_event(track_uuid, timestamp_ms)
+        instant_type = self._get_type(["TYPE_INSTANT", "TYPE_SLICE_BEGIN"])
+        if instant_type is not None:
+            event.type = instant_type
+        if hasattr(event, "name"):
+            event.name = name
+        self._append_category(event, category)
+        self._apply_color(event, hex_color)
+        self._attach_annotations(event, annotations)
+
+    def serialize(self, output_path: Path):
+        if not self.available or self.trace is None:
+            return
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with output_path.open("wb") as fp:
+            fp.write(self.trace.SerializeToString())
+
+    def _new_event(self, track_uuid: int, timestamp_ms: float):
+        if not self.available or self.trace is None:
+            raise RuntimeError("Perfetto builder is not available")
+        packet = self.trace.packet.add()
+        event = packet.track_event
+        event.track_uuid = track_uuid
+        event.timestamp = _ms_to_ns(timestamp_ms)
+        return event
+
+    def _generate_uuid(self) -> int:
+        return uuid.uuid4().int & ((1 << 63) - 1)
+
+    def _apply_color(self, message_obj: Any, hex_color: Optional[str]):
+        color_value = _hex_to_argb(hex_color)
+        if color_value is None or message_obj is None:
+            return
+
+        for attr_name in ("color", "track_color", "background_color_argb"):
+            if hasattr(message_obj, attr_name):
+                try:
+                    setattr(message_obj, attr_name, color_value)
+                    return
+                except Exception:
+                    continue
+
+        nested = getattr(message_obj, "track", None)
+        if nested is not None:
+            self._apply_color(nested, hex_color)
+
+    def _append_category(self, event: Any, category: Optional[str]):
+        if not category or event is None:
+            return
+
+        if hasattr(event, "categories"):
+            try:
+                event.categories.append(category)
+                return
+            except Exception:
+                try:
+                    event.categories.extend([category])
+                    return
+                except Exception:
+                    pass
+
+        if hasattr(event, "category"):
+            try:
+                event.category = category
+            except Exception:
+                pass
+
+    def _set_slice_info(self, event: Any, name: str, category: Optional[str], duration_ms: float):
+        slice_field = getattr(event, "slice", None)
+        if slice_field is None:
+            return
+        try:
+            if hasattr(slice_field, "name"):
+                slice_field.name = name
+            if category and hasattr(slice_field, "category"):
+                slice_field.category = category
+            if duration_ms is not None and hasattr(slice_field, "duration"):
+                slice_field.duration = _ms_to_ns(duration_ms)
+        except Exception:
+            return
+
+    def _apply_duration(self, event: Any, duration_ms: float):
+        if duration_ms is None:
+            return
+        for attr_name in ("duration", "duration_ns"):
+            if hasattr(event, attr_name):
+                try:
+                    setattr(event, attr_name, _ms_to_ns(duration_ms))
+                    return
+                except Exception:
+                    continue
+
+    def _attach_annotations(self, event: Any, annotations: Optional[Dict[str, Any]]):
+        if not annotations:
+            return
+        if hasattr(event, "legacy_event"):
+            legacy = event.legacy_event
+            if hasattr(legacy, "args"):
+                try:
+                    args = legacy.args
+                    for key, value in annotations.items():
+                        args[key] = str(value)
+                    return
+                except Exception:
+                    pass
+        if hasattr(event, "debug_annotations"):
+            try:
+                for key, value in annotations.items():
+                    annotation = event.debug_annotations.add()
+                    annotation.name = key
+                    if hasattr(annotation, "string_value"):
+                        annotation.string_value = str(value)
+            except Exception:
+                pass
+
+    def _get_type(self, candidates: List[str]) -> Optional[int]:
+        if not self.track_event_type_values:
+            return None
+        for name in candidates:
+            if name in self.track_event_type_values:
+                return self.track_event_type_values[name]
+        return None

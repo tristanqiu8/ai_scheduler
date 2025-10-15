@@ -234,6 +234,7 @@ class OptimizationInterface:
         plan = launcher.create_launch_plan(time_window, launch_strategy)
         executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
         executor.execute_plan(plan, time_window, segment_mode=segment_mode)
+        tracer.apply_priority_overrides(best_config)
 
         # 恢复默认日志设置
         if log_level == "detailed":
