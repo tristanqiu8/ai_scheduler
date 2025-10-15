@@ -3,10 +3,10 @@
 """
 AI Scheduler Main API Entry Point
 
-Version: 1.0preview
-Maintainer: Tristan.Qiu
-Team: AIC (AI Computing)
-Description: Neural Network Task Scheduler with Priority Optimization
+Version: 1.0
+Maintainer: Tristan.Qiu, Xiong.Guo, and Neal.Nie
+Team: AIC (Artificial Intelligence Compilation)
+Description: A Multi-task Neural Network Task Simulator with Automatic Optimization
 
 This is the main entry point for the AI Scheduler API.
 It provides a simple interface to the optimization functionality.
@@ -18,10 +18,10 @@ import argparse
 from pathlib import Path
 
 # Version and metadata
-__version__ = "1.0preview"
-__maintainer__ = "Tristan.Qiu"
+__version__ = "1.0"
+__maintainer__ = "Tristan.Qiu, Xiong.Guo, Neal.Nie"
 __team__ = "AIC"
-__description__ = "Neural Network Task Scheduler"
+__description__ = "A Multi-task Neural Network Task Simulator with Automatic Optimization"
 
 def print_banner():
     """Print the application banner with version info."""

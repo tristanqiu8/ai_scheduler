@@ -1,7 +1,7 @@
 # AI Scheduler
 
 [![Python](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-1.0.0preview-green.svg)](https://github.com/your-org/ai-scheduler)
+[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](https://github.com/your-org/ai-scheduler)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 AI Scheduler是一个专业的神经网络任务调度器，具有优先级优化功能。它能够智能地在NPU（神经处理单元）和DSP（数字信号处理器）资源上调度和优化神经网络任务的执行。
@@ -316,7 +316,7 @@ pip install dist/ai_scheduler-*.whl
 
 - **维护者**: Tristan.Qiu
 - **团队**: AIC (AI Computing)
-- **版本**: 1.0.0preview
+- **版本**: 1.0.0
 
 ## 🤝 贡献
 

@@ -25,7 +25,7 @@ def get_version():
             for line in f:
                 if line.startswith("__version__"):
                     return line.split("=")[1].strip().strip('"').strip("'")
-    return "1.0.0preview"
+    return "1.0.0"
 
 # 读取依赖
 def get_requirements():
