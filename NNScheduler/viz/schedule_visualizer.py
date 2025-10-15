@@ -29,17 +29,17 @@ from NNScheduler.core.artifacts import ensure_artifact_path
 
 
 PRIORITY_HEX_COLORS = {
-    TaskPriority.CRITICAL: "#FF8A80",  # 轻柔红
-    TaskPriority.HIGH: "#FFE082",      # 粉柔黄
-    TaskPriority.NORMAL: "#90CAF9",    # 天空蓝
-    TaskPriority.LOW: "#A5D6A7",       # 薄荷绿
+    TaskPriority.CRITICAL: "#FF3B30",  # 鲜红
+    TaskPriority.HIGH: "#FFD60A",      # 亮黄
+    TaskPriority.NORMAL: "#0A84FF",    # 明蓝
+    TaskPriority.LOW: "#BF5AF2",       # 亮紫
 }
 
-PRIORITY_CHROME_COLORS = {
+PRIORITY_CHROME_CNAME = {
     TaskPriority.CRITICAL: "bad",
-    TaskPriority.HIGH: "rail_load",
+    TaskPriority.HIGH: "rail_animation",
     TaskPriority.NORMAL: "rail_response",
-    TaskPriority.LOW: "good",
+    TaskPriority.LOW: "thread_state_iowait",
 }
 
 RESOURCE_MARKERS = {
@@ -54,6 +54,10 @@ RESOURCE_MARKERS = {
 
 # Timeline padding reserved for labels in textual view
 TEXT_TIMELINE_PADDING = 13
+
+# 分开资源执行与任务时延的Chrome Trace进程ID
+RESOURCE_TRACE_PID = 1
+TASK_LATENCY_TRACE_PID = 2
 
 
 class ScheduleVisualizer:
@@ -210,22 +214,46 @@ class ScheduleVisualizer:
         task_summaries = self.tracer.get_task_latency_summary()
         
         # 添加进程和线程元数据
-        # 进程名称
         chrome_events.append({
             "name": "process_name",
             "ph": "M",
-            "pid": 0,
+            "pid": RESOURCE_TRACE_PID,
             "args": {
-                "name": "AI Scheduler"
+                "name": "Resource Tracks"
             }
         })
+        chrome_events.append({
+            "name": "process_sort_index",
+            "ph": "M",
+            "pid": RESOURCE_TRACE_PID,
+            "args": {
+                "sort_index": 0
+            }
+        })
+        if task_summaries:
+            chrome_events.append({
+                "name": "process_name",
+                "ph": "M",
+                "pid": TASK_LATENCY_TRACE_PID,
+                "args": {
+                    "name": "Task Timelines"
+                }
+            })
+            chrome_events.append({
+                "name": "process_sort_index",
+                "ph": "M",
+                "pid": TASK_LATENCY_TRACE_PID,
+                "args": {
+                    "sort_index": 1
+                }
+            })
         
         # 为每个资源添加线程名称
         for resource_id, tid in resource_tid_map.items():
             chrome_events.append({
                 "name": "thread_name",
                 "ph": "M",
-                "pid": 0,
+                "pid": RESOURCE_TRACE_PID,
                 "tid": tid,
                 "args": {
                     "name": resource_id
@@ -236,7 +264,7 @@ class ScheduleVisualizer:
             chrome_events.append({
                 "name": "thread_sort_index",
                 "ph": "M",
-                "pid": 0,
+                "pid": RESOURCE_TRACE_PID,
                 "tid": tid,
                 "args": {
                     "sort_index": tid
@@ -248,7 +276,9 @@ class ScheduleVisualizer:
             tid = resource_tid_map.get(execution.resource_id, 0)
             priority_hex = PRIORITY_HEX_COLORS.get(execution.priority)
             priority_argb = _hex_to_argb(priority_hex)
-            
+            priority_rgb = _hex_to_rgb(priority_hex)
+            cname = PRIORITY_CHROME_CNAME.get(execution.priority)
+
             # 主事件（完整持续时间）
             event = {
                 "name": f"{execution.task_id}",
@@ -256,7 +286,7 @@ class ScheduleVisualizer:
                 "ph": "X",  # Complete event
                 "ts": execution.start_time * 1000,  # 转换为微秒
                 "dur": execution.duration * 1000,
-                "pid": 0,
+                "pid": RESOURCE_TRACE_PID,
                 "tid": tid,
                 "args": {
                     "task_id": execution.task_id,
@@ -264,19 +294,20 @@ class ScheduleVisualizer:
                     "bandwidth": execution.bandwidth,
                     "segment": execution.segment_id or "main",
                     "duration_ms": execution.duration,
-                    "hex_color": priority_hex
+                    "hex_color": priority_hex,
                 }
             }
-            
-            # 根据优先级设置颜色
-            color = self._get_priority_color(execution.priority)
-            if color:
-                event["cname"] = color
+
+            if priority_rgb:
+                event["args"]["rgb_color"] = priority_rgb
+                event["args"]["rgba_color"] = f"rgba({priority_rgb[0]}, {priority_rgb[1]}, {priority_rgb[2]}, 1)"
             if priority_argb is not None:
                 event["color"] = priority_argb
-            
+            if cname:
+                event["cname"] = cname
+
             chrome_events.append(event)
-            
+
             # 为CRITICAL任务添加标记
             if execution.priority == TaskPriority.CRITICAL:
                 marker = {
@@ -284,46 +315,73 @@ class ScheduleVisualizer:
                     "cat": "priority",
                     "ph": "i",  # Instant event
                     "ts": execution.start_time * 1000,
-                    "pid": 0,
+                    "pid": RESOURCE_TRACE_PID,
                     "tid": tid,
-                    "s": "t",  # Thread scope
-                    "cname": "bad"
+                    "s": "t"  # Thread scope
                 }
+                if priority_hex:
+                    marker["args"] = {
+                        "priority": "CRITICAL",
+                        "hex_color": priority_hex,
+                    }
                 if priority_argb is not None:
                     marker["color"] = priority_argb
+                if cname:
+                    marker["cname"] = cname
                 chrome_events.append(marker)
         
         # 为每个任务创建独立线程，展示端到端时延
         if task_summaries:
-            start_tid = (max(resource_tid_map.values()) if resource_tid_map else 0) + 1
-            sort_base = len(resource_tid_map) + 1
-            for offset, summary in enumerate(sorted(task_summaries.values(), key=lambda item: (item["first_start"], item["task_id"]))):
+            start_tid = 1
+            sort_base = 1
+            sorted_summaries = sorted(
+                task_summaries.values(),
+                key=lambda item: (item["first_start"], item["task_id"])
+            )
+
+            task_thread_map: Dict[str, Dict[str, Any]] = {}
+
+            for summary in sorted_summaries:
                 display_name = summary.get("display_name") or summary.get("task_id")
+                thread_key = summary.get("task_id") or display_name
                 priority: TaskPriority = summary.get("priority", TaskPriority.NORMAL)
-                tid = start_tid + offset
-                sort_index = sort_base + offset
                 priority_hex = PRIORITY_HEX_COLORS.get(priority)
                 priority_argb = _hex_to_argb(priority_hex)
-                
-                chrome_events.append({
-                    "name": "thread_name",
-                    "ph": "M",
-                    "pid": 0,
-                    "tid": tid,
-                    "args": {
-                        "name": display_name
+                priority_rgb = _hex_to_rgb(priority_hex)
+                cname = PRIORITY_CHROME_CNAME.get(priority)
+
+                thread_meta = task_thread_map.get(thread_key)
+                if thread_meta is None:
+                    thread_index = len(task_thread_map)
+                    tid = start_tid + thread_index
+                    sort_index = sort_base + thread_index
+                    thread_meta = {
+                        "tid": tid,
+                        "sort_index": sort_index,
+                        "display_name": display_name or thread_key,
                     }
-                })
-                chrome_events.append({
-                    "name": "thread_sort_index",
-                    "ph": "M",
-                    "pid": 0,
-                    "tid": tid,
-                    "args": {
-                        "sort_index": sort_index
-                    }
-                })
-                
+                    task_thread_map[thread_key] = thread_meta
+
+                    chrome_events.append({
+                        "name": "thread_name",
+                        "ph": "M",
+                        "pid": TASK_LATENCY_TRACE_PID,
+                        "tid": tid,
+                        "args": {
+                            "name": thread_meta["display_name"]
+                        }
+                    })
+                    chrome_events.append({
+                        "name": "thread_sort_index",
+                        "ph": "M",
+                        "pid": TASK_LATENCY_TRACE_PID,
+                        "tid": tid,
+                        "args": {
+                            "sort_index": sort_index
+                        }
+                    })
+                tid = thread_meta["tid"]
+
                 latency_duration_us = max(summary["latency"], 0.0) * 1000
                 task_event = {
                     "name": display_name,
@@ -331,7 +389,7 @@ class ScheduleVisualizer:
                     "ph": "X",
                     "ts": summary["first_start"] * 1000,
                     "dur": max(latency_duration_us, 1.0),
-                    "pid": 0,
+                    "pid": TASK_LATENCY_TRACE_PID,
                     "tid": tid,
                     "args": {
                         "task_id": summary.get("task_id"),
@@ -346,19 +404,21 @@ class ScheduleVisualizer:
                         "hex_color": priority_hex,
                     }
                 }
-                color = self._get_priority_color(priority)
-                if color:
-                    task_event["cname"] = color
                 if priority_argb is not None:
                     task_event["color"] = priority_argb
+                if priority_rgb:
+                    task_event["args"]["rgb_color"] = priority_rgb
+                    task_event["args"]["rgba_color"] = f"rgba({priority_rgb[0]}, {priority_rgb[1]}, {priority_rgb[2]}, 1)"
+                if cname:
+                    task_event["cname"] = cname
                 chrome_events.append(task_event)
-                
+
                 highlight_event = {
                     "name": "dispatch",
                     "cat": "TaskDispatch",
                     "ph": "i",
                     "ts": summary["first_start"] * 1000,
-                    "pid": 0,
+                    "pid": TASK_LATENCY_TRACE_PID,
                     "tid": tid,
                     "s": "p",
                     "args": {
@@ -369,10 +429,13 @@ class ScheduleVisualizer:
                         "hex_color": priority_hex
                     }
                 }
-                if color:
-                    highlight_event["cname"] = color
                 if priority_argb is not None:
                     highlight_event["color"] = priority_argb
+                if priority_rgb:
+                    highlight_event["args"]["rgb_color"] = priority_rgb
+                    highlight_event["args"]["rgba_color"] = f"rgba({priority_rgb[0]}, {priority_rgb[1]}, {priority_rgb[2]}, 1)"
+                if cname:
+                    highlight_event["cname"] = cname
                 chrome_events.append(highlight_event)
         
         output_path = ensure_artifact_path(filename)
@@ -389,9 +452,7 @@ class ScheduleVisualizer:
             }, f, indent=2)
         print(f"Chrome tracing exported to: {output_path}")
         
-        perfetto_path = self._export_perfetto_trace(output_path, task_summaries)
-        if perfetto_path:
-            print(f"Perfetto trace exported to: {perfetto_path}")
+        # Skip Perfetto export for now to avoid dependency warnings
     
     def plot_resource_timeline(self, filename: Optional[str] = None, 
                              figsize: tuple = (14, 8), dpi: int = 120):
@@ -422,7 +483,6 @@ class ScheduleVisualizer:
             
             for exec in executions:
                 color = priority_colors.get(exec.priority, '#1E88E5')
-                
                 # 创建矩形
                 rect = Rectangle(
                     (exec.start_time, y_pos - 0.2),
@@ -547,10 +607,6 @@ class ScheduleVisualizer:
             TaskPriority.LOW: "L"
         }
         return mapping.get(priority, "?")
-    
-    def _get_priority_color(self, priority: TaskPriority) -> Optional[str]:
-        """根据优先级返回Chrome/Perfetto调色板名"""
-        return PRIORITY_CHROME_COLORS.get(priority)
     
     def _get_resource_marker(self, resource_type: Optional[ResourceType]) -> str:
         """根据资源类型返回文本流水线标记"""
@@ -679,11 +735,40 @@ def _ms_to_ns(value_ms: float) -> int:
 def _hex_to_argb(hex_color: Optional[str]) -> Optional[int]:
     if not hex_color:
         return None
+
     value = hex_color.lstrip("#")
     if len(value) == 6:
-        return (0xFF << 24) | int(value, 16)
+        alpha = 0xFF
+        red = int(value[0:2], 16)
+        green = int(value[2:4], 16)
+        blue = int(value[4:6], 16)
+    elif len(value) == 8:
+        alpha = int(value[0:2], 16)
+        red = int(value[2:4], 16)
+        green = int(value[4:6], 16)
+        blue = int(value[6:8], 16)
+    else:
+        return None
+
+    return (alpha << 24) | (red << 16) | (green << 8) | blue
+
+
+def _hex_to_rgb(hex_color: Optional[str]) -> Optional[tuple]:
+    if not hex_color:
+        return None
+    value = hex_color.lstrip("#")
+    if len(value) == 6:
+        return (
+            int(value[0:2], 16),
+            int(value[2:4], 16),
+            int(value[4:6], 16),
+        )
     if len(value) == 8:
-        return int(value, 16)
+        return (
+            int(value[2:4], 16),
+            int(value[4:6], 16),
+            int(value[6:8], 16),
+        )
     return None
 
 
