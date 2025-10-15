@@ -102,8 +102,21 @@ def run_optimization_from_json(config_file: str, output_dir: str = "./artifacts_
 
     print(f"满足率: {best_config['satisfaction_rate']:.1%}")
     print(f"平均延迟: {best_config['avg_latency']:.1f}ms")
-    print(f"NPU利用率: {best_config['resource_utilization']['NPU']:.1f}%")
-    print(f"DSP利用率: {best_config['resource_utilization']['DSP']:.1f}%")
+
+    resource_utilization = best_config.get('resource_utilization', {})
+    display_items = [
+        (res_type, util) for res_type, util in sorted(resource_utilization.items())
+        if util is not None and abs(util) > 1e-3
+    ]
+
+    if display_items:
+        print("资源利用率:")
+        print("-"*40)
+        for res_type, util in display_items:
+            print(f"{res_type}利用率: {util:.1f}%")
+    else:
+        print("资源利用率: 暂无数据")
+
     print(f"系统利用率: {best_config['system_utilization']:.1f}%")
 
     # 优先级配置
@@ -135,29 +148,34 @@ def run_optimization_from_json(config_file: str, output_dir: str = "./artifacts_
     print(f"\n生成的输出文件:")
     print("-"*40)
 
-    # 查找生成的文件（按时间戳命名）
+    viz_files = result.get('visualization_files', {})
+
+    timeline_rel = viz_files.get('timeline_png')
+    if timeline_rel:
+        timeline_path = Path(timeline_rel)
+        if not timeline_path.is_absolute():
+            timeline_path = artifacts_dir / timeline_path
+        print(f"甘特图: {timeline_path}")
+
+    trace_rel = viz_files.get('chrome_trace')
+    if trace_rel:
+        trace_path = Path(trace_rel)
+        if not trace_path.is_absolute():
+            trace_path = artifacts_dir / trace_path
+        print(f"Chrome trace: {trace_path}")
+
+    # 最优配置文件（若存在）
     import glob
     current_time = time.strftime('%Y%m%d')
-
-    # 甘特图
-    timeline_files = glob.glob(str(artifacts_dir / f"optimized_schedule_timeline_{current_time}_*.png"))
-    if timeline_files:
-        print(f"甘特图: {timeline_files[-1]}")  # 最新的文件
-
-    # Chrome trace
-    trace_files = glob.glob(str(artifacts_dir / f"optimized_schedule_chrome_trace_{current_time}_*.json"))
-    if trace_files:
-        print(f"Chrome trace: {trace_files[-1]}")  # 最新的文件
-
-    # 最优配置
-    config_files = glob.glob(str(artifacts_dir / f"optimized_priority_config_{current_time}_*.json"))
+    config_files = sorted(glob.glob(str(artifacts_dir / f"optimized_priority_config*_{current_time}_*.json")))
     if config_files:
-        print(f"最优配置: {config_files[-1]}")  # 最新的文件
+        print(f"最优配置: {config_files[-1]}")
 
-    # 详细结果
-    result_files = glob.glob(str(artifacts_dir / f"optimization_result_{current_time}_*.json"))
-    if result_files:
-        print(f"详细结果: {result_files[-1]}")  # 最新的文件
+    output_file_path = Path(result.get('output_file', ''))
+    if output_file_path:
+        if not output_file_path.is_absolute():
+            output_file_path = artifacts_dir / output_file_path
+        print(f"详细结果: {output_file_path}")
 
     print("\n[SUCCESS] 优化完成！")
 

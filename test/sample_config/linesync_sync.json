@@ -1,0 +1,80 @@
+{
+  "optimization": {
+    "max_iterations": 1,
+    "max_time_seconds": 10,
+    "target_satisfaction": 1.0,
+    "time_window": 15.0,
+    "segment_mode": true,
+    "enable_detailed_analysis": false,
+    "search_priority": false,
+    "log_level": "normal",
+    "launch_strategy": "sync"
+  },
+  "resources": {
+    "resources": [
+      { "resource_id": "ISP_0", "resource_type": "ISP", "bandwidth": 50.0 },
+      { "resource_id": "NPU_0", "resource_type": "NPU", "bandwidth": 80.0 }
+    ]
+  },
+  "scenario": {
+    "use_camera_tasks": false,
+    "scenario_name": "Linesync Sync Pipeline",
+    "description": "Two alternating ISP-NPU tasks with synchronized launch timing.",
+    "tasks": [
+      {
+        "task_id": "linesync_small",
+        "name": "linesync_small",
+        "priority": "CRITICAL",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 333.3,
+        "latency": 1.5,
+        "model": {
+          "segments": [
+            {
+              "resource_type": "ISP",
+              "segment_id": "isp_stage",
+              "duration_table": { "50": 1.0 },
+              "power": 0.0,
+              "ddr": 0.0
+            },
+            {
+              "resource_type": "NPU",
+              "segment_id": "npu_stage",
+              "duration_table": { "80": 0.5 },
+              "power": 0.0,
+              "ddr": 0.0
+            }
+          ]
+        }
+      },
+      {
+        "task_id": "linesync_big",
+        "name": "linesync_big",
+        "priority": "HIGH",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 333.3,
+        "latency": 3.0,
+        "model": {
+          "segments": [
+            {
+              "resource_type": "ISP",
+              "segment_id": "isp_stage",
+              "duration_table": { "50": 2.0 },
+              "power": 0.0,
+              "ddr": 0.0
+            },
+            {
+              "resource_type": "NPU",
+              "segment_id": "npu_stage",
+              "duration_table": { "80": 1.0 },
+              "power": 0.0,
+              "ddr": 0.0
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

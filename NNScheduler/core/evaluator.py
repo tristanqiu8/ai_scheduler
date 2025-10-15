@@ -94,6 +94,7 @@ class OverallPerformanceMetrics:
     # 资源利用率
     avg_npu_utilization: float
     avg_dsp_utilization: float
+    avg_isp_utilization: float
     overall_resource_utilization: float
     resource_balance_score: float  # 资源负载均衡度(0-1)
     
@@ -317,13 +318,16 @@ class PerformanceEvaluator:
         violation_rate = (total_violations / total_instances) * 100.0 if total_instances > 0 else 0
         
         # 资源利用率
-        npu_utils = [m.utilization_rate for m in self.resource_metrics.values() 
+        npu_utils = [m.utilization_rate for m in self.resource_metrics.values()
                      if m.resource_type == ResourceType.NPU]
-        dsp_utils = [m.utilization_rate for m in self.resource_metrics.values() 
+        dsp_utils = [m.utilization_rate for m in self.resource_metrics.values()
                      if m.resource_type == ResourceType.DSP]
+        isp_utils = [m.utilization_rate for m in self.resource_metrics.values()
+                     if m.resource_type == ResourceType.ISP]
         
         avg_npu = sum(npu_utils) / len(npu_utils) if npu_utils else 0
         avg_dsp = sum(dsp_utils) / len(dsp_utils) if dsp_utils else 0
+        avg_isp = sum(isp_utils) / len(isp_utils) if isp_utils else 0
         all_utils = list(self.resource_metrics.values())
         overall_util = sum(m.utilization_rate for m in all_utils) / len(all_utils) if all_utils else 0
         
@@ -357,6 +361,7 @@ class PerformanceEvaluator:
             latency_violation_rate=violation_rate,
             avg_npu_utilization=avg_npu,
             avg_dsp_utilization=avg_dsp,
+            avg_isp_utilization=avg_isp,
             overall_resource_utilization=overall_util,
             resource_balance_score=balance_score,
             total_tasks=total_tasks,
@@ -432,6 +437,7 @@ class PerformanceEvaluator:
         print(f"\n资源利用:")
         print(f"  - NPU平均利用率: {m.avg_npu_utilization:.1f}%")
         print(f"  - DSP平均利用率: {m.avg_dsp_utilization:.1f}%")
+        print(f"  - ISP平均利用率: {m.avg_isp_utilization:.1f}%")
         print(f"  - 整体利用率: {m.overall_resource_utilization:.1f}%")
         print(f"  - 负载均衡度: {m.resource_balance_score:.2f}")
         
@@ -481,6 +487,7 @@ class PerformanceEvaluator:
             "resource_utilization": {
                 "npu_avg": m.avg_npu_utilization,
                 "dsp_avg": m.avg_dsp_utilization,
+                "isp_avg": m.avg_isp_utilization,
                 "overall": m.overall_resource_utilization,
                 "balance_score": m.resource_balance_score
             },

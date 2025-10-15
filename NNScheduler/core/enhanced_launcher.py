@@ -159,6 +159,12 @@ class EnhancedTaskLauncher:
             return self._create_smart_eager_plan(time_window)
         elif strategy == "lazy":
             return self._create_lazy_plan(time_window)
+        elif strategy == "sync":
+            try:
+                return self._create_sync_plan(time_window)
+            except Exception as exc:
+                print(f"[WARN] Sync launch计划失败，回退到balanced策略: {exc}")
+                return self._create_balanced_plan(time_window)
         else:
             return self._create_balanced_plan(time_window)
             
@@ -266,6 +272,66 @@ class EnhancedTaskLauncher:
             launch_time = max(launch_time, min_time)
             
         return launch_time
+
+    def _create_sync_plan(self, time_window: float) -> LaunchPlan:
+        """创建同步交替的发射计划，确保任务按ISP阶段顺序轮流发射"""
+        plan = LaunchPlan()
+        if not self.tasks:
+            return plan
+
+        ordered_tasks = sorted(
+            self.tasks.values(),
+            key=lambda t: (self.task_configs[t.task_id].priority.value, t.task_id)
+        )
+
+        bw_map = self._get_actual_bandwidth_map()
+        isp_offsets: Dict[str, float] = {}
+        isp_duration_map: Dict[str, float] = {}
+
+        offset_acc = 0.0
+        for task in ordered_tasks:
+            isp_segment = next((seg for seg in task.segments if seg.resource_type == ResourceType.ISP), None)
+            if isp_segment is None:
+                raise ValueError(f"Task {task.task_id} 缺少ISP段，无法使用sync策略")
+            isp_duration = isp_segment.get_duration(bw_map[ResourceType.ISP])
+            if isp_duration <= 0:
+                raise ValueError(f"Task {task.task_id} 的ISP段时长无效: {isp_duration}")
+
+            isp_duration_map[task.task_id] = isp_duration
+            isp_offsets[task.task_id] = offset_acc
+            offset_acc += isp_duration
+
+        cycle_length = offset_acc
+        if cycle_length <= 0:
+            raise ValueError("Sync策略计算得到的cycle_length无效")
+
+        instance_counts: Dict[str, int] = defaultdict(int)
+        next_allowed: Dict[str, float] = {task_id: 0.0 for task_id in self.tasks}
+        cycle_start = 0.0
+        epsilon = 1e-6
+
+        while cycle_start < time_window - epsilon:
+            for task in ordered_tasks:
+                task_id = task.task_id
+                launch_time = cycle_start + isp_offsets[task_id]
+                if launch_time >= time_window:
+                    continue
+
+                min_interval = self.task_configs[task_id].min_interval
+                if launch_time + epsilon < next_allowed[task_id]:
+                    launch_time = next_allowed[task_id]
+
+                plan.add_launch(task_id, launch_time, instance_counts[task_id])
+                instance_counts[task_id] += 1
+                next_allowed[task_id] = launch_time + min_interval
+
+            cycle_start += cycle_length
+
+            if cycle_length <= epsilon:
+                break
+
+        plan.sort_events()
+        return plan
     
     def _get_dependency_instance(self, task_id: str, instance_id: int, dep_id: str) -> int:
         """获取依赖任务的实例号（考虑帧率差异）

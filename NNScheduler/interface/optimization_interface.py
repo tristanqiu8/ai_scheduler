@@ -7,6 +7,7 @@ import json
 import time
 import random
 import os
+import re
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, asdict
 from collections import defaultdict
@@ -51,6 +52,25 @@ class OptimizationInterface:
             TaskPriority.HIGH,
             TaskPriority.CRITICAL
         ]
+        self._current_scenario_slug: str = ""
+
+    @staticmethod
+    def _sanitize_scenario_name(name: str) -> str:
+        if not name:
+            return ""
+        sanitized = re.sub(r'\s+', '_', name.strip())
+        sanitized = re.sub(r'[^A-Za-z0-9_\-]+', '_', sanitized)
+        sanitized = re.sub(r'_+', '_', sanitized)
+        return sanitized.strip('_')
+
+    @staticmethod
+    def _build_timestamped_name(base: str, scenario_slug: str, timestamp: str, extension: str) -> str:
+        parts = [base]
+        if scenario_slug:
+            parts.append(scenario_slug)
+        parts.append(timestamp)
+        filename = "_".join(parts)
+        return f"{filename}{extension}"
 
     def optimize_from_json(self, config_file: str, output_file: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -84,6 +104,8 @@ class OptimizationInterface:
         optimization_config = config.get("optimization", {})
         scenario_config = config.get("scenario", {})
         resource_config = config.get("resources", {})
+        scenario_name = scenario_config.get("scenario_name", "")
+        self._current_scenario_slug = self._sanitize_scenario_name(scenario_name)
 
         # 从配置中读取search_priority设置，默认为true
         search_priority = optimization_config.get("search_priority", True)
@@ -93,7 +115,7 @@ class OptimizationInterface:
 
         # 发射策略（eager|lazy|balanced），默认balanced
         launch_strategy = str(optimization_config.get("launch_strategy", "balanced")).strip().lower()
-        if launch_strategy not in {"eager", "lazy", "balanced"}:
+        if launch_strategy not in {"eager", "lazy", "balanced", "sync"}:
             print(f"[WARN] 无效的launch_strategy: {launch_strategy}，已回退为balanced")
             launch_strategy = "balanced"
 
@@ -172,13 +194,24 @@ class OptimizationInterface:
             print("[INFO] 可视化生成已通过环境变量 AI_SCHEDULER_DISABLE_VISUALS 禁用")
         else:
             visualization_files = self._generate_visualizations(
-                tasks, best_config, resource_config, optimization_config, log_level
+                tasks,
+                best_config,
+                resource_config,
+                optimization_config,
+                log_level,
+                scenario_slug=self._current_scenario_slug
             )
         result["visualization_files"] = visualization_files
 
         # 保存结果
         if output_file is None:
-            output_file = f"optimization_result_{time.strftime('%Y%m%d_%H%M%S')}.json"
+            timestamp = time.strftime('%Y%m%d_%H%M%S')
+            output_file = self._build_timestamped_name(
+                "optimization_result",
+                self._current_scenario_slug,
+                timestamp,
+                ".json"
+            )
 
         JsonInterface.save_to_file(result, output_file)
         result["output_file"] = output_file
@@ -186,13 +219,15 @@ class OptimizationInterface:
         return result
 
     def _generate_visualizations(self, tasks: List[NNTask], best_config: Dict[str, TaskPriority],
-                               resource_config: Dict[str, Any], optimization_config: Dict[str, Any], log_level: str = "normal") -> Dict[str, str]:
+                               resource_config: Dict[str, Any], optimization_config: Dict[str, Any],
+                               log_level: str = "normal", scenario_slug: str = "") -> Dict[str, str]:
         """生成可视化文件"""
         try:
             from NNScheduler.viz.schedule_visualizer import ScheduleVisualizer
         except Exception as exc:
             print(f"[WARN] 可视化生成被跳过: {exc}")
             return {}
+        scenario_slug = scenario_slug or self._current_scenario_slug
         # 应用最佳配置
         for task in tasks:
             task.priority = best_config[task.task_id]
@@ -227,7 +262,7 @@ class OptimizationInterface:
         time_window = optimization_config.get("time_window", 1000.0)
         # 读取并规范化发射策略
         launch_strategy = str(optimization_config.get("launch_strategy", "balanced")).strip().lower()
-        if launch_strategy not in {"eager", "lazy", "balanced"}:
+        if launch_strategy not in {"eager", "lazy", "balanced", "sync"}:
             print(f"[WARN] 无效的launch_strategy: {launch_strategy}，已回退为balanced")
             launch_strategy = "balanced"
 
@@ -247,12 +282,22 @@ class OptimizationInterface:
         files = {}
 
         # Chrome Tracing
-        chrome_trace_file = f"optimized_schedule_chrome_trace_{timestamp}.json"
+        chrome_trace_file = self._build_timestamped_name(
+            "optimized_schedule_chrome_trace",
+            scenario_slug,
+            timestamp,
+            ".json"
+        )
         visualizer.export_chrome_tracing(chrome_trace_file)
         files["chrome_trace"] = chrome_trace_file
 
         # Timeline PNG
-        png_file = f"optimized_schedule_timeline_{timestamp}.png"
+        png_file = self._build_timestamped_name(
+            "optimized_schedule_timeline",
+            scenario_slug,
+            timestamp,
+            ".png"
+        )
         visualizer.plot_resource_timeline(png_file)
         files["timeline_png"] = png_file
 
@@ -309,7 +354,7 @@ class JsonPriorityOptimizer:
         self.user_priority_config = user_priority_config or {}
         # 规范化发射策略
         self.launch_strategy = str(launch_strategy).strip().lower()
-        if self.launch_strategy not in {"eager", "lazy", "balanced"}:
+        if self.launch_strategy not in {"eager", "lazy", "balanced", "sync"}:
             self.launch_strategy = "balanced"
 
         # 分析任务特征
@@ -489,10 +534,41 @@ class JsonPriorityOptimizer:
 
         satisfaction_rate = total_satisfied / len(evaluator.task_metrics)
 
-        # 计算系统利用率
-        npu_utilization = metrics.avg_npu_utilization / 100.0
-        dsp_utilization = metrics.avg_dsp_utilization / 100.0
-        system_utilization = (1 - (1 - npu_utilization) * (1 - dsp_utilization)) * 100.0
+        # 汇总资源利用率（按资源类型）
+        resource_type_utilization: Dict[str, List[float]] = defaultdict(list)
+        for res_metrics in evaluator.resource_metrics.values():
+            resource_type_utilization[res_metrics.resource_type.value].append(res_metrics.utilization_rate)
+
+        avg_resource_utilization = {
+            rtype: (sum(values) / len(values)) if values else 0.0
+            for rtype, values in resource_type_utilization.items()
+        }
+
+        # 计算系统利用率（综合所有资源类型）
+        if avg_resource_utilization:
+            system_idle_factor = 1.0
+            for util in avg_resource_utilization.values():
+                ratio = max(0.0, min(util / 100.0, 1.0))
+                system_idle_factor *= (1.0 - ratio)
+            system_utilization = (1.0 - system_idle_factor) * 100.0
+        else:
+            npu_ratio = max(0.0, min(metrics.avg_npu_utilization / 100.0, 1.0))
+            dsp_ratio = max(0.0, min(metrics.avg_dsp_utilization / 100.0, 1.0))
+            system_utilization = (1.0 - (1.0 - npu_ratio) * (1.0 - dsp_ratio)) * 100.0
+
+        resource_utilization = avg_resource_utilization.copy()
+        if ResourceType.NPU.value not in resource_utilization:
+            resource_utilization[ResourceType.NPU.value] = metrics.avg_npu_utilization
+        if (ResourceType.DSP.value in resource_type_utilization and
+                ResourceType.DSP.value not in resource_utilization):
+            resource_utilization[ResourceType.DSP.value] = metrics.avg_dsp_utilization
+        if (ResourceType.ISP.value in resource_type_utilization and
+                ResourceType.ISP.value not in resource_utilization):
+            resource_utilization[ResourceType.ISP.value] = metrics.avg_isp_utilization
+        # 移除可能出现的 None 值，保持有序输出
+        resource_utilization = {
+            key: value for key, value in sorted(resource_utilization.items()) if value is not None
+        }
 
         return OptimizationResult(
             iteration=len(self.optimization_history),
@@ -501,10 +577,7 @@ class JsonPriorityOptimizer:
             latency_satisfaction=latency_satisfaction,
             total_satisfaction_rate=satisfaction_rate,
             avg_latency=metrics.avg_latency,
-            resource_utilization={
-                'NPU': metrics.avg_npu_utilization,
-                'DSP': metrics.avg_dsp_utilization
-            },
+            resource_utilization=resource_utilization,
             fps_analysis=fps_analysis,
             power_analysis=power_analysis,
             ddr_analysis=ddr_analysis,
