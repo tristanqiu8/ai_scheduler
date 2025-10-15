@@ -9,7 +9,7 @@ import random
 import os
 import re
 from typing import Dict, List, Any, Optional, Tuple
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from collections import defaultdict
 
 from NNScheduler.core.resource_queue import ResourceQueueManager
@@ -38,6 +38,7 @@ class OptimizationResult:
     power_analysis: Dict[str, float]  # 新增：功耗分析
     ddr_analysis: Dict[str, float]    # 新增：DDR分析
     system_utilization: float        # 新增：系统利用率
+    latency_details: Dict[str, Any] = field(default_factory=dict)
 
 
 class OptimizationInterface:
@@ -71,6 +72,26 @@ class OptimizationInterface:
         parts.append(timestamp)
         filename = "_".join(parts)
         return f"{filename}{extension}"
+
+    @staticmethod
+    def _round_numeric_fields(data: Any, key_hint: str = ""):
+        if isinstance(data, dict):
+            return {
+                k: OptimizationInterface._round_numeric_fields(v, k)
+                for k, v in data.items()
+            }
+        if isinstance(data, list):
+            return [OptimizationInterface._round_numeric_fields(v, key_hint) for v in data]
+        if isinstance(data, float):
+            key = (key_hint or "").lower()
+            decimals = 1
+            if key.endswith("_ms") or "latency" in key or "time" in key or "duration" in key:
+                decimals = 2
+            rounded = round(data, decimals)
+            if abs(rounded) < 1e-9:
+                rounded = 0.0
+            return rounded
+        return data
 
     def optimize_from_json(self, config_file: str, output_file: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -181,7 +202,8 @@ class OptimizationInterface:
                 "ddr_analysis": best_result.ddr_analysis,
                 "system_utilization": best_result.system_utilization,
                 "fps_satisfaction": best_result.fps_satisfaction,
-                "latency_satisfaction": best_result.latency_satisfaction
+                "latency_satisfaction": best_result.latency_satisfaction,
+                "latency_details": best_result.latency_details
             },
             "optimization_history": [asdict(r) for r in optimizer.optimization_history],
             "task_features": optimizer.task_features
@@ -213,6 +235,7 @@ class OptimizationInterface:
                 ".json"
             )
 
+        result = self._round_numeric_fields(result)
         JsonInterface.save_to_file(result, output_file)
         result["output_file"] = output_file
 
@@ -518,7 +541,7 @@ class JsonPriorityOptimizer:
         metrics = evaluator.evaluate(self.time_window, plan.events)
 
         # 收集详细分析数据
-        fps_analysis, power_analysis, ddr_analysis = self._collect_detailed_analysis(evaluator)
+        fps_analysis, power_analysis, ddr_analysis, latency_details = self._collect_detailed_analysis(evaluator)
 
         # 收集满足情况
         fps_satisfaction = {}
@@ -581,19 +604,30 @@ class JsonPriorityOptimizer:
             fps_analysis=fps_analysis,
             power_analysis=power_analysis,
             ddr_analysis=ddr_analysis,
-            system_utilization=system_utilization
+            system_utilization=system_utilization,
+            latency_details=latency_details
         )
 
-    def _collect_detailed_analysis(self, evaluator) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
+    def _collect_detailed_analysis(self, evaluator) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float], Dict[str, Any]]:
         """收集详细分析数据"""
         fps_analysis = {}
         power_analysis = {}
         ddr_analysis = {}
+        latency_details: Dict[str, Any] = {}
 
         total_fps = 0.0
         total_power = 0.0  # mW
         total_ddr = 0.0    # MB
         total_segment_executions = 0
+
+        tracer_summaries = evaluator.tracer.get_task_latency_summary()
+        summary_index: Dict[str, Dict[int, Dict[str, Any]]] = defaultdict(dict)
+        for summary in tracer_summaries.values():
+            task_id = summary.get("task_id")
+            if not task_id:
+                continue
+            instance_id = summary.get("instance_id", 0)
+            summary_index[task_id][instance_id] = summary
 
         # 分析每个任务
         for task_id, task_metrics in evaluator.task_metrics.items():
@@ -617,6 +651,44 @@ class JsonPriorityOptimizer:
             power_analysis[task_id] = task_total_power
             ddr_analysis[task_id] = task_total_ddr
 
+            latencies = list(task_metrics.latencies)
+            summary_records = summary_index.get(task_id, {})
+            instance_records = []
+            for record in getattr(task_metrics, "latency_records", []):
+                instance_id = record.get("instance_id", 0)
+                summary = summary_records.get(instance_id)
+                first_start = summary.get("first_start") if summary else record.get("first_start")
+                completion_time = summary.get("last_end") if summary else record.get("completion_time")
+                trace_latency = summary.get("latency") if summary else (
+                    (completion_time - first_start) if completion_time is not None and first_start is not None else record.get("latency")
+                )
+                instance_records.append({
+                    "instance_id": instance_id,
+                    "launch_time_ms": record.get("launch_time"),
+                    "first_start_ms": first_start,
+                    "completion_time_ms": completion_time,
+                    "trace_latency_ms": trace_latency,
+                    "total_latency_ms": record.get("latency"),
+                })
+
+            min_latency = min(latencies) if latencies else 0.0
+            latency_details[task_id] = {
+                "latencies_ms": latencies,
+                "avg_latency_ms": task_metrics.avg_latency,
+                "max_latency_ms": task_metrics.max_latency,
+                "min_latency_ms": min_latency,
+                "latency_violations": task_metrics.latency_violations,
+                "latency_violation_rate_percent": (
+                    (1.0 - task_metrics.latency_satisfaction_rate) * 100.0
+                    if task_metrics.latencies else 0.0
+                ),
+                "latency_satisfaction_rate_percent": (
+                    task_metrics.latency_satisfaction_rate * 100.0
+                    if task_metrics.latencies else 0.0
+                ),
+                "instances": instance_records,
+            }
+
         # 计算段执行总数
         for resource_metrics in evaluator.resource_metrics.values():
             total_segment_executions += resource_metrics.segment_executions
@@ -629,7 +701,7 @@ class JsonPriorityOptimizer:
         ddr_analysis["total_ddr_gb"] = total_ddr / 1024.0
         fps_analysis["total_segment_executions"] = total_segment_executions
 
-        return fps_analysis, power_analysis, ddr_analysis
+        return fps_analysis, power_analysis, ddr_analysis, latency_details
 
     def adjust_priorities(self, current_config: Dict[str, TaskPriority],
                          result: OptimizationResult) -> Dict[str, TaskPriority]:

@@ -43,6 +43,7 @@ class TaskPerformanceMetrics:
     max_latency: float = 0.0
     latency_violations: int = 0
     latency_satisfaction_rate: float = 0.0
+    latency_records: List[Dict[str, float]] = field(default_factory=list)
     
     # 执行时间统计
     execution_times: List[float] = field(default_factory=list)
@@ -218,11 +219,18 @@ class PerformanceEvaluator:
                     # 等待时间：发射到首次执行
                     wait_time = first_exec.start_time - launch_time
                     metrics.wait_times.append(wait_time)
-                    
+
                     # 总延迟：发射到完成
                     total_latency = last_exec.end_time - launch_time
                     metrics.latencies.append(total_latency)
-                    
+                    metrics.latency_records.append({
+                        "instance_id": instance_num,
+                        "launch_time": launch_time,
+                        "first_start": first_exec.start_time,
+                        "completion_time": last_exec.end_time,
+                        "latency": total_latency,
+                    })
+
                     # 检查延迟违规
                     if total_latency > metrics.latency_requirement:
                         metrics.latency_violations += 1
