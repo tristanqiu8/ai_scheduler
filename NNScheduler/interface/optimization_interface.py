@@ -65,10 +65,14 @@ class OptimizationInterface:
         return sanitized.strip('_')
 
     @staticmethod
-    def _build_timestamped_name(base: str, scenario_slug: str, timestamp: str, extension: str) -> str:
+    def _build_timestamped_name(base: str, scenario_slug: str, timestamp: str, extension: str,
+                                launch_strategy: str = "") -> str:
         parts = [base]
         if scenario_slug:
             parts.append(scenario_slug)
+        strategy_slug = OptimizationInterface._sanitize_scenario_name(launch_strategy)
+        if strategy_slug:
+            parts.append(strategy_slug)
         parts.append(timestamp)
         filename = "_".join(parts)
         return f"{filename}{extension}"
@@ -232,7 +236,8 @@ class OptimizationInterface:
                 "optimization_result",
                 self._current_scenario_slug,
                 timestamp,
-                ".json"
+                ".json",
+                launch_strategy=launch_strategy
             )
 
         result = self._round_numeric_fields(result)
@@ -309,7 +314,8 @@ class OptimizationInterface:
             "optimized_schedule_chrome_trace",
             scenario_slug,
             timestamp,
-            ".json"
+            ".json",
+            launch_strategy=launch_strategy
         )
         visualizer.export_chrome_tracing(chrome_trace_file)
         files["chrome_trace"] = chrome_trace_file
@@ -319,7 +325,8 @@ class OptimizationInterface:
             "optimized_schedule_timeline",
             scenario_slug,
             timestamp,
-            ".png"
+            ".png",
+            launch_strategy=launch_strategy
         )
         visualizer.plot_resource_timeline(png_file)
         files["timeline_png"] = png_file
