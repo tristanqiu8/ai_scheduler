@@ -7,6 +7,7 @@ from typing import Dict, List, Tuple, Optional, Set
 from dataclasses import dataclass, field
 from collections import defaultdict
 import heapq
+import random
 
 from NNScheduler.core.models import SubSegment
 from NNScheduler.core.enums import ResourceType, TaskPriority
@@ -105,10 +106,28 @@ class ScheduleExecutor:
     
     def __init__(self, queue_manager: ResourceQueueManager, 
                  tracer: ScheduleTracer,
-                 tasks: Dict[str, NNTask]):
+                 tasks: Dict[str, NNTask],
+                 random_slack_enabled: bool = False,
+                 random_slack_std: float = 0.0,
+                 random_slack_seed: Optional[int] = None,
+                 launch_strategy: str = "balanced"):
         self.queue_manager = queue_manager
         self.tracer = tracer
         self.tasks = tasks
+
+        self.launch_strategy = (launch_strategy or "balanced").lower()
+        if self.launch_strategy not in {"eager", "lazy", "balanced", "sync"}:
+            self.launch_strategy = "balanced"
+
+        self.random_slack_std = max(0.0, float(random_slack_std))
+        self.random_slack_enabled = bool(random_slack_enabled and self.random_slack_std > 0.0)
+        if self.launch_strategy == "sync":
+            self.random_slack_enabled = False
+
+        if self.random_slack_enabled:
+            self._slack_rng = random.Random(random_slack_seed)
+        else:
+            self._slack_rng = None
 
         # 执行状态
         self.task_instances: Dict[Tuple[str, int], TaskInstance] = {}
@@ -341,11 +360,19 @@ class ScheduleExecutor:
         task_def = self.tasks.get(instance.task_id)
         task_name = task_def.name if task_def else None
 
+        base_ready_time = self.current_time
+        ready_time = base_ready_time
+        jitter_ms = 0.0
+        if segment_index == 0 and self.random_slack_enabled and self._slack_rng:
+            jitter = self._slack_rng.gauss(0.0, self.random_slack_std)
+            ready_time = max(0.0, base_ready_time + jitter)
+            jitter_ms = ready_time - base_ready_time
+
         # 加入队列
         queue.enqueue(
             segment_id,
             instance.priority,
-            self.current_time,
+            ready_time,
             [segment]
         )
         
@@ -358,12 +385,13 @@ class ScheduleExecutor:
             segment_id,
             queue.resource_id,
             instance.priority,
-            self.current_time,
+            ready_time,
             [segment],
             original_task_id=instance.task_id,
             task_name=task_name,
             instance_id=instance.instance_id,
-            segment_index=segment_index
+            segment_index=segment_index,
+            jitter_ms=jitter_ms if segment_index == 0 else None
         )
         
         if ENABLE_EXECUTION_LOG:
@@ -475,6 +503,15 @@ class ScheduleExecutor:
         for queue in self.queue_manager.resource_queues.values():
             if queue.is_busy():
                 next_time = min(next_time, queue.busy_until)
+            # 考虑等待中的任务最早就绪时间（处理ready_time扰动）
+            next_ready: Optional[float] = None
+            for priority_queue in queue.priority_queues.values():
+                for queued_task in priority_queue:
+                    if queued_task.ready_time > self.current_time:
+                        if next_ready is None or queued_task.ready_time < next_ready:
+                            next_ready = queued_task.ready_time
+            if next_ready is not None:
+                next_time = min(next_time, next_ready)
         
         # 推进时间
         if next_time > self.current_time:

@@ -119,6 +119,9 @@ pytest test/NNScheduler/test_simple_optimization.py -k priority  # 定点用例
 关键字段说明：
 
 - `optimization.launch_strategy`：`eager` / `lazy` / `balanced` / `sync`，同时会写入生成文件名。
+- `optimization.enable_random_slack`：首段高斯扰动开关，默认开启，可显式关闭。
+- `optimization.slack`：首段扰动的方差，单位毫秒，默认值 `0.2`。
+- `optimization.random_slack_seed`：可选整数种子，设置后可复现扰动序列。
 - `scenario.tasks[*].model.segments`：描述任务在各资源上的序列执行片段，可配合 `cut_points` 进行细粒度分段。
 - `dependencies`：声明任务间的执行依赖，执行器会在依赖完成后立即入队下一段。
 

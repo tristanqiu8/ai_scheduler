@@ -279,6 +279,14 @@ class ScheduleVisualizer:
             priority_rgb = _hex_to_rgb(priority_hex)
             cname = PRIORITY_CHROME_CNAME.get(execution.priority)
 
+            task_key = self.tracer.segment_to_task_key.get(execution.task_id)
+            summary = task_summaries.get(task_key) if task_key else None
+            ready_time = summary.get("ready_time") if summary else None
+            jitter_ms = summary.get("jitter_ms") if summary else None
+            wait_ms = None
+            if ready_time is not None:
+                wait_ms = execution.start_time - ready_time
+
             # 主事件（完整持续时间）
             event = {
                 "name": f"{execution.task_id}",
@@ -297,6 +305,13 @@ class ScheduleVisualizer:
                     "hex_color": priority_hex,
                 }
             }
+
+            if ready_time is not None:
+                event["args"]["ready_time_ms"] = ready_time
+            if wait_ms is not None:
+                event["args"]["wait_ms"] = wait_ms
+            if jitter_ms is not None:
+                event["args"]["jitter_ms"] = jitter_ms
 
             if priority_rgb:
                 event["args"]["rgb_color"] = priority_rgb
@@ -382,12 +397,37 @@ class ScheduleVisualizer:
                     })
                 tid = thread_meta["tid"]
 
-                latency_duration_us = max(summary["latency"], 0.0) * 1000
+                ready_time = summary.get("ready_time")
+                first_start = summary.get("first_start")
+                last_end = summary.get("last_end")
+                total_latency = summary.get("total_latency")
+                execution_latency = summary.get("execution_latency")
+
+                if execution_latency is None and first_start is not None and last_end is not None:
+                    execution_latency = max(last_end - first_start, 0.0)
+                if total_latency is None:
+                    if ready_time is not None and last_end is not None:
+                        total_latency = max(last_end - ready_time, 0.0)
+                    elif execution_latency is not None:
+                        total_latency = execution_latency
+                    else:
+                        total_latency = 0.0
+
+                if ready_time is not None:
+                    event_start = ready_time
+                else:
+                    event_start = first_start if first_start is not None else 0.0
+
+                wait_ms = None
+                if ready_time is not None and first_start is not None:
+                    wait_ms = max(first_start - ready_time, 0.0)
+
+                latency_duration_us = max(total_latency or 0.0, 0.0) * 1000
                 task_event = {
                     "name": display_name,
                     "cat": "TaskLatency",
                     "ph": "X",
-                    "ts": summary["first_start"] * 1000,
+                    "ts": event_start * 1000,
                     "dur": max(latency_duration_us, 1.0),
                     "pid": TASK_LATENCY_TRACE_PID,
                     "tid": tid,
@@ -396,7 +436,11 @@ class ScheduleVisualizer:
                         "task_name": summary.get("task_name"),
                         "instance_id": summary.get("instance_id"),
                         "priority": priority.name,
-                        "latency_ms": summary.get("latency"),
+                        "latency_ms": total_latency,
+                        "total_latency_ms": total_latency,
+                        "execution_latency_ms": execution_latency,
+                        "ready_time_ms": ready_time,
+                        "wait_ms": wait_ms,
                         "segment_count": summary.get("segment_count"),
                         "first_resource": summary.get("first_resource_id"),
                         "first_segment_id": summary.get("first_segment_id"),

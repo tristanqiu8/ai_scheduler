@@ -82,6 +82,17 @@ tasks = interface.parse_scenario_config(config)
 }
 ```
 
+### 优化配置字段
+
+在同一份 JSON 中，还可以通过 `optimization` 小节控制求解行为：
+
+- `max_iterations` / `max_time_seconds` / `target_satisfaction`：迭代次数、耗时与目标满足率门限。
+- `launch_strategy`：`eager` / `balanced` / `lazy` / `sync`，决定任务实例的发射模式。
+- `segment_mode`：布尔值，设为 `true` 时在执行器中按子段调度。
+- `slack`：首段扰动的方差（毫秒），默认 `0.2`，设为 `0` 表示无幅度。
+- `enable_random_slack`：是否启用首段随机扰动，默认 `true`，可显式关闭。
+- `random_slack_seed`：可选整数种子，设置后可复现同一组扰动样本。
+
 ## 模型配置
 
 ### 使用预定义模型

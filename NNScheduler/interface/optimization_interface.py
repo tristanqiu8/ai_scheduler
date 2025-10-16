@@ -39,6 +39,7 @@ class OptimizationResult:
     ddr_analysis: Dict[str, float]    # 新增：DDR分析
     system_utilization: float        # 新增：系统利用率
     latency_details: Dict[str, Any] = field(default_factory=dict)
+    tracer_snapshot: Dict[str, Any] = field(default_factory=dict)
 
 
 class OptimizationInterface:
@@ -135,6 +136,20 @@ class OptimizationInterface:
         # 从配置中读取search_priority设置，默认为true
         search_priority = optimization_config.get("search_priority", True)
 
+        # 随机扰动配置（slack为高斯方差，单位ms）
+        slack_raw = optimization_config.get("slack", 0.2)
+        try:
+            random_slack_std = float(slack_raw)
+        except (TypeError, ValueError):
+            print(f"[WARN] 无效的 slack 值: {slack_raw}，已回退为 0.2ms")
+            random_slack_std = 0.2
+        random_slack_std = max(0.0, random_slack_std)
+
+        random_slack_enabled = optimization_config.get("enable_random_slack", True)
+        if isinstance(random_slack_enabled, str):
+            random_slack_enabled = random_slack_enabled.strip().lower() not in {"false", "0", "no"}
+        random_slack_seed = optimization_config.get("random_slack_seed")
+
         # 从配置中读取log_level设置，默认为"normal"
         log_level = optimization_config.get("log_level", "normal")
 
@@ -171,7 +186,10 @@ class OptimizationInterface:
             resources=resource_config,
             search_priority=search_priority,
             user_priority_config=user_priority_config,
-            launch_strategy=launch_strategy
+            launch_strategy=launch_strategy,
+            random_slack_enabled=random_slack_enabled,
+            random_slack_std=random_slack_std,
+            random_slack_seed=random_slack_seed
         )
 
         # 设置日志级别
@@ -225,7 +243,8 @@ class OptimizationInterface:
                 resource_config,
                 optimization_config,
                 log_level,
-                scenario_slug=self._current_scenario_slug
+                scenario_slug=self._current_scenario_slug,
+                tracer_snapshot=best_result.tracer_snapshot
             )
         result["visualization_files"] = visualization_files
 
@@ -248,7 +267,8 @@ class OptimizationInterface:
 
     def _generate_visualizations(self, tasks: List[NNTask], best_config: Dict[str, TaskPriority],
                                resource_config: Dict[str, Any], optimization_config: Dict[str, Any],
-                               log_level: str = "normal", scenario_slug: str = "") -> Dict[str, str]:
+                               log_level: str = "normal", scenario_slug: str = "",
+                               tracer_snapshot: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
         """生成可视化文件"""
         try:
             from NNScheduler.viz.schedule_visualizer import ScheduleVisualizer
@@ -282,29 +302,62 @@ class OptimizationInterface:
         for task in tasks:
             launcher.register_task(task)
 
-        # 设置日志级别
-        if log_level == "detailed":
-            set_execution_log_enabled(True)
-
-        # 执行调度
-        time_window = optimization_config.get("time_window", 1000.0)
-        # 读取并规范化发射策略
         launch_strategy = str(optimization_config.get("launch_strategy", "balanced")).strip().lower()
         if launch_strategy not in {"eager", "lazy", "balanced", "sync"}:
             print(f"[WARN] 无效的launch_strategy: {launch_strategy}，已回退为balanced")
             launch_strategy = "balanced"
 
-        plan = launcher.create_launch_plan(time_window, launch_strategy)
-        executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
-        executor.execute_plan(plan, time_window, segment_mode=segment_mode)
-        tracer.apply_priority_overrides(best_config)
+        tracer_for_visual: Optional[ScheduleTracer] = None
 
-        # 恢复默认日志设置
-        if log_level == "detailed":
-            set_execution_log_enabled(False)
+        if tracer_snapshot:
+            try:
+                tracer_for_visual = ScheduleTracer.from_snapshot(tracer_snapshot)
+                tracer_for_visual.apply_priority_overrides(best_config)
+            except Exception as exc:
+                print(f"[WARN] 追踪器快照还原失败，改为重新执行调度: {exc}")
+
+        if tracer_for_visual is None:
+            # 设置日志级别
+            if log_level == "detailed":
+                set_execution_log_enabled(True)
+
+            # 执行调度
+            time_window = optimization_config.get("time_window", 1000.0)
+            slack_raw = optimization_config.get("slack", 0.2)
+            try:
+                random_slack_std = max(0.0, float(slack_raw))
+            except (TypeError, ValueError):
+                random_slack_std = 0.2
+            random_slack_enabled = optimization_config.get("enable_random_slack", True)
+            if isinstance(random_slack_enabled, str):
+                random_slack_enabled = random_slack_enabled.strip().lower() not in {"false", "0", "no"}
+            random_slack_seed = optimization_config.get("random_slack_seed")
+            try:
+                random_slack_seed = None if random_slack_seed is None else int(random_slack_seed)
+            except (TypeError, ValueError):
+                random_slack_seed = None
+
+            slack_enabled = (random_slack_enabled and random_slack_std > 0 and launch_strategy != "sync")
+
+            plan = launcher.create_launch_plan(time_window, launch_strategy)
+            executor = ScheduleExecutor(
+                queue_manager,
+                tracer,
+                launcher.tasks,
+                random_slack_enabled=slack_enabled,
+                random_slack_std=random_slack_std,
+                random_slack_seed=random_slack_seed,
+                launch_strategy=launch_strategy
+            )
+            executor.execute_plan(plan, time_window, segment_mode=segment_mode)
+            tracer.apply_priority_overrides(best_config)
+            tracer_for_visual = tracer
+
+            if log_level == "detailed":
+                set_execution_log_enabled(False)
 
         # 生成可视化
-        visualizer = ScheduleVisualizer(tracer)
+        visualizer = ScheduleVisualizer(tracer_for_visual)
         timestamp = time.strftime('%Y%m%d_%H%M%S')
 
         files = {}
@@ -375,7 +428,9 @@ class JsonPriorityOptimizer:
     """JSON版本的优先级优化器 - 与test_cam_auto_priority_optimization.py功能相同"""
 
     def __init__(self, tasks: List[NNTask], time_window=1000.0, segment_mode=True, resources=None,
-                 search_priority=True, user_priority_config=None, launch_strategy: str = "balanced"):
+                 search_priority=True, user_priority_config=None, launch_strategy: str = "balanced",
+                 random_slack_enabled: bool = True, random_slack_std: float = 0.2,
+                 random_slack_seed: Optional[int] = None):
         self.tasks = tasks
         self.time_window = time_window
         self.segment_mode = segment_mode
@@ -386,6 +441,13 @@ class JsonPriorityOptimizer:
         self.launch_strategy = str(launch_strategy).strip().lower()
         if self.launch_strategy not in {"eager", "lazy", "balanced", "sync"}:
             self.launch_strategy = "balanced"
+
+        self.random_slack_enabled = bool(random_slack_enabled)
+        self.random_slack_std = max(0.0, float(random_slack_std))
+        try:
+            self.random_slack_seed = None if random_slack_seed is None else int(random_slack_seed)
+        except (TypeError, ValueError):
+            self.random_slack_seed = None
 
         # 分析任务特征
         self.task_features = self._analyze_task_features()
@@ -540,7 +602,19 @@ class JsonPriorityOptimizer:
 
         # 创建并执行计划
         plan = launcher.create_launch_plan(self.time_window, self.launch_strategy)
-        executor = ScheduleExecutor(queue_manager, tracer, launcher.tasks)
+        slack_enabled = (self.random_slack_enabled and
+                          self.random_slack_std > 0 and
+                          self.launch_strategy != "sync")
+
+        executor = ScheduleExecutor(
+            queue_manager,
+            tracer,
+            launcher.tasks,
+            random_slack_enabled=slack_enabled,
+            random_slack_std=self.random_slack_std,
+            random_slack_seed=self.random_slack_seed,
+            launch_strategy=self.launch_strategy
+        )
         stats = executor.execute_plan(plan, self.time_window, segment_mode=self.segment_mode)
 
         # 评估性能
@@ -600,7 +674,7 @@ class JsonPriorityOptimizer:
             key: value for key, value in sorted(resource_utilization.items()) if value is not None
         }
 
-        return OptimizationResult(
+        result = OptimizationResult(
             iteration=len(self.optimization_history),
             priority_config={k: v.name for k, v in priority_config.items()},
             fps_satisfaction=fps_satisfaction,
@@ -614,6 +688,13 @@ class JsonPriorityOptimizer:
             system_utilization=system_utilization,
             latency_details=latency_details
         )
+
+        try:
+            result.tracer_snapshot = tracer.to_snapshot()
+        except Exception as exc:
+            print(f"[WARN] 追踪器快照生成失败: {exc}")
+
+        return result
 
     def _collect_detailed_analysis(self, evaluator) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float], Dict[str, Any]]:
         """收集详细分析数据"""
@@ -658,7 +739,7 @@ class JsonPriorityOptimizer:
             power_analysis[task_id] = task_total_power
             ddr_analysis[task_id] = task_total_ddr
 
-            latencies = list(task_metrics.latencies)
+            latencies = []
             summary_records = summary_index.get(task_id, {})
             instance_records = []
             for record in getattr(task_metrics, "latency_records", []):
@@ -666,23 +747,37 @@ class JsonPriorityOptimizer:
                 summary = summary_records.get(instance_id)
                 first_start = summary.get("first_start") if summary else record.get("first_start")
                 completion_time = summary.get("last_end") if summary else record.get("completion_time")
-                trace_latency = summary.get("latency") if summary else (
-                    (completion_time - first_start) if completion_time is not None and first_start is not None else record.get("latency")
-                )
+                ready_time = summary.get("ready_time") if summary else record.get("launch_time")
+                total_latency = None
+                execution_latency = None
+                if summary:
+                    total_latency = summary.get("total_latency") or summary.get("latency")
+                    execution_latency = summary.get("execution_latency")
+                if total_latency is None and completion_time is not None and ready_time is not None:
+                    total_latency = completion_time - ready_time
+                if execution_latency is None and completion_time is not None and first_start is not None:
+                    execution_latency = completion_time - first_start
+                trace_latency = total_latency if total_latency is not None else record.get("latency")
+                if total_latency is None:
+                    total_latency = record.get("latency")
+                if total_latency is not None:
+                    latencies.append(total_latency)
                 instance_records.append({
                     "instance_id": instance_id,
                     "launch_time_ms": record.get("launch_time"),
                     "first_start_ms": first_start,
                     "completion_time_ms": completion_time,
                     "trace_latency_ms": trace_latency,
-                    "total_latency_ms": record.get("latency"),
+                    "total_latency_ms": total_latency,
+                    "execution_latency_ms": execution_latency,
+                    "ready_time_ms": ready_time,
                 })
 
             min_latency = min(latencies) if latencies else 0.0
             latency_details[task_id] = {
                 "latencies_ms": latencies,
-                "avg_latency_ms": task_metrics.avg_latency,
-                "max_latency_ms": task_metrics.max_latency,
+                "avg_latency_ms": (sum(latencies) / len(latencies)) if latencies else 0.0,
+                "max_latency_ms": max(latencies) if latencies else 0.0,
                 "min_latency_ms": min_latency,
                 "latency_violations": task_metrics.latency_violations,
                 "latency_violation_rate_percent": (
