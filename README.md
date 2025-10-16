@@ -1,150 +1,114 @@
 # AI Scheduler
 
-[![Python](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](https://github.com/your-org/ai-scheduler)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+AI Scheduler 是一套针对多任务神经网络场景的调度与优化引擎，能够在 NPU、DSP 等异构资源之间协调任务执行，并输出可视化的时间线与统计数据。
 
-AI Scheduler是一个专业的神经网络任务调度器，具有优先级优化功能。它能够智能地在NPU（神经处理单元）和DSP（数字信号处理器）资源上调度和优化神经网络任务的执行。
+## ✨ 核心能力
 
-## ✨ 主要特性
+- 🚀 **多资源调度**：支持 NPU / DSP 协同执行与资源负载均衡。
+- 🎯 **优先级优化**：提供基于满足率的优先级搜索与评估。
+- 📊 **可视化输出**：生成 Chrome Tracing JSON 与时间线 PNG（需本地安装 `matplotlib`）。
+- 🧪 **场景复现**：内置多份 JSON 配置用于快速回放及回归测试。
 
-- 🚀 **智能任务调度**: 基于优先级和资源约束的自动任务调度
-- ⚡ **多资源支持**: 支持NPU和DSP混合资源调度
-- 🎯 **优化算法**: 内置优先级搜索和满足率优化算法
-- 📊 **可视化输出**: 生成甘特图和Chrome Tracing文件
-- 🛠️ **双接口支持**: 提供命令行和Python API两种使用方式
-- 📦 **开箱即用**: 包含多种预配置的样本场景
-- 🔧 **高度可配置**: 支持JSON配置文件和程序化配置
+## 📦 安装与构建
 
-## 📦 安装
-
-### 从PyPI安装（推荐）
+### 1. 开发环境安装（推荐）
 ```bash
-pip install ai-scheduler
-```
-
-### 从源码安装
-```bash
-git clone <repository-url>
-cd ai-scheduler
 pip install -e .
 ```
 
-## 🚀 快速开始
+> 安装完成后，包内暴露的是 `NNScheduler` 模块及相关接口。当前工程未随 wheel 一同发布完善的 `ai_scheduler` 包装层，命令行脚本 `ai-scheduler` 在现有代码中不可用。
 
-### 命令行使用
-
+### 2. 构建 wheel 包
 ```bash
-# 查看所有可用的样本配置
-ai-scheduler --list-samples
+# 可选：清理旧产物
+rm -rf build dist *.egg-info
 
-# 使用内置样本配置运行优化
-ai-scheduler sample:config_1npu_1dsp.json
+# 方式一：使用 build 模块
+python -m build --wheel
 
-# 使用自定义配置文件
-ai-scheduler my_config.json --output ./results
-
-# 验证配置文件格式
-ai-scheduler --validate my_config.json
-
-# 启用详细输出
-ai-scheduler my_config.json --verbose
+# 方式二：沿用 setup.py
+python setup.py bdist_wheel
 ```
 
-### Python API使用
+生成的文件位于 `dist/ai_scheduler-<版本>-py3-none-any.whl`。
 
+### 3. 安装 wheel 包
+```bash
+pip install dist/ai_scheduler-<版本>-py3-none-any.whl
+```
+
+> 当前 wheel 仅包含 `NNScheduler` 命名空间；若需命令行入口，请继续使用仓库根目录的 `main_api.py`。
+
+## 🚀 使用指南
+
+### 直接运行调度（推荐）
+```bash
+# 运行预置场景
+python main_api.py test/sample_config/config_1npu_1dsp.json --output ./artifacts_sim
+
+# 显示更多细节
+python main_api.py test/sample_config/dnr_4k30_tk_eager.json --verbose --output ./artifacts_debug
+```
+
+### Python 中调用核心接口
 ```python
-import ai_scheduler
+from NNScheduler.interface.optimization_interface import OptimizationInterface
 
-# 最简单的使用方式
-result = ai_scheduler.optimize_from_json('config.json')
-print(f"满足率: {result['best_configuration']['satisfaction_rate']:.1%}")
-
-# 使用内置样本配置
-sample_path = ai_scheduler.get_sample_config_path('config_1npu_1dsp.json')
-result = ai_scheduler.optimize_from_json(sample_path, output_dir='./output')
-
-# 创建优化器实例进行高级操作
-api = ai_scheduler.create_optimizer()
-validation = api.validate_config('config.json')
-if validation['valid']:
-    result = api.optimize_from_json('config.json', 'output')
+api = OptimizationInterface()
+result = api.optimize_from_json("test/sample_config/config_1npu_1dsp.json")
+print(result["best_configuration"]["satisfaction_rate"])
 ```
 
-## 📁 项目结构
-
-```
-ai-scheduler/
-├── ai_scheduler/              # 主包目录
-│   ├── __init__.py           # 包初始化和便捷函数
-│   ├── cli.py                # 命令行接口
-│   ├── core/                 # 核心功能模块
-│   │   ├── optimization_api.py  # 优化API
-│   │   └── __init__.py
-│   ├── NNScheduler/          # 底层调度器模块
-│   │   ├── core/             # 核心调度逻辑
-│   │   ├── interface/        # 接口模块
-│   │   └── ...
-│   └── sample_config/        # 样本配置文件
-│       ├── config_1npu_1dsp.json
-│       ├── config_2npu_1dsp.json
-│       └── ...
-├── example_test.py           # 使用示例
-├── setup.py                  # 安装配置
-├── requirements.txt          # 依赖文件
-└── README.md                # 本文件
+### 测试 & 验证
+```bash
+pytest                    # 全量回归
+pytest test/NNScheduler/test_simple_optimization.py -k priority  # 定点用例
 ```
 
-## 🎯 核心概念
+## 📁 仓库结构
 
-### 任务类型
-- **NPU任务**: 在神经处理单元上执行的推理任务
-- **DSP任务**: 在数字信号处理器上执行的信号处理任务
-- **混合任务**: 需要在多种资源上顺序执行的复杂任务
+```
+├── NNScheduler/                 # 核心调度引擎
+│   ├── core/                    # 调度执行、资源队列、评估等
+│   ├── interface/               # JSON 接口、可视化、Web API
+│   └── viz/                     # 时序可视化实现
+├── artifacts_sim/               # 运行产物示例（Chrome Trace / PNG / JSON）
+├── dist/                        # 已构建的 wheel 包
+├── docs/                        # 额外文档
+├── main_api.py                  # 推荐的命令行入口
+├── setup.py                     # 打包脚本
+└── test/                        # Pytest 套件与样例配置
+```
 
-### 优先级系统
-- **CRITICAL**: 最高优先级，优先调度
-- **HIGH**: 高优先级
-- **NORMAL**: 普通优先级
-- **LOW**: 低优先级
-
-### 调度策略
-- **搜索优化模式** (`search_priority: true`): 系统自动搜索和调整任务优先级
-- **固定优先级模式** (`search_priority: false`): 使用用户配置的固定优先级
-
-## ⚙️ 配置文件格式
-
-AI Scheduler使用JSON格式的配置文件，基本结构如下：
+## ⚙️ JSON 配置概览
 
 ```json
 {
   "optimization": {
-    "max_iterations": 25,
-    "target_satisfaction": 0.95,
-    "search_priority": true,
-    "log_level": "normal"
+    "max_iterations": 30,
+    "max_time_seconds": 120,
+    "time_window": 200.0,
+    "segment_mode": true,
+    "launch_strategy": "balanced"
   },
   "resources": {
     "resources": [
-      {
-        "resource_id": "NPU_0",
-        "resource_type": "NPU",
-        "bandwidth": 160.0
-      }
+      {"resource_id": "NPU_0", "resource_type": "NPU", "bandwidth": 80.0},
+      {"resource_id": "DSP_0", "resource_type": "DSP", "bandwidth": 80.0}
     ]
   },
   "scenario": {
     "scenario_name": "示例场景",
-    "description": "场景描述",
     "tasks": [
       {
-        "task_id": "TASK_1",
-        "name": "Task1",
+        "task_id": "T1",
         "priority": "HIGH",
         "fps": 30.0,
-        "latency": 20.0,
+        "latency": 33.3,
         "model": {
-          "segments": [...]
+          "segments": [
+            {"resource_type": "NPU", "duration_table": {"80": 2.1}, "segment_id": "npu_s0"}
+          ]
         }
       }
     ]
@@ -152,52 +116,19 @@ AI Scheduler使用JSON格式的配置文件，基本结构如下：
 }
 ```
 
-### 主要配置参数
+关键字段说明：
 
-#### optimization段
-- `max_iterations`: 最大优化迭代次数
-- `max_time_seconds`: 最大优化时间（秒）
-- `target_satisfaction`: 目标满足率 (0.0-1.0)
-- `search_priority`: 是否启用优先级搜索优化
-- `log_level`: 日志级别 ("normal" 或 "detailed")
+- `optimization.launch_strategy`：`eager` / `lazy` / `balanced` / `sync`，同时会写入生成文件名。
+- `scenario.tasks[*].model.segments`：描述任务在各资源上的序列执行片段，可配合 `cut_points` 进行细粒度分段。
+- `dependencies`：声明任务间的执行依赖，执行器会在依赖完成后立即入队下一段。
 
-#### resources段
-- `resource_id`: 资源唯一标识
-- `resource_type`: 资源类型 ("NPU" 或 "DSP")
-- `bandwidth`: 资源带宽
+## ❗ 已知限制
 
-#### tasks段
-- `task_id`: 任务唯一标识
-- `priority`: 任务优先级
-- `fps`: 期望帧率
-- `latency`: 延迟要求（毫秒）
-- `segmentation_strategy`: 分段策略
-- `dependencies`: 任务依赖关系
+- 现有 wheel 入口文件仍指向未实现的 `ai_scheduler.cli:main`，安装后请直接使用仓库内的 `main_api.py` 或导入 `NNScheduler` 接口。
+- 生成 PNG 时间线依赖 `matplotlib`，默认不随仓库安装，必要时需自行 `pip install matplotlib`。
+- 可视化功能可通过环境变量 `AI_SCHEDULER_DISABLE_VISUALS=1` 关闭，以便在无绘图库环境运行。
 
-## 🔧 API参考
-
-### 便捷函数
-
-```python
-# 从JSON文件运行优化
-ai_scheduler.optimize_from_json(config_file, output_dir="./artifacts")
-
-# 创建优化器实例
-ai_scheduler.create_optimizer(config_dict=None)
-
-# 获取样本配置路径
-ai_scheduler.get_sample_config_path(name)
-
-# 列出所有样本配置
-ai_scheduler.get_sample_configs()
-
-# 获取版本信息
-ai_scheduler.version_info()
-```
-
-### OptimizationAPI类
-
-```python
+欢迎在 `test/sample_config` 基础上扩展场景，也可使用 `artifacts_sim` 目录下的产物做复现与排错。
 from ai_scheduler import OptimizationAPI
 
 api = OptimizationAPI()
@@ -308,33 +239,11 @@ python -m build
 pip install dist/ai_scheduler-*.whl
 ```
 
-## 📄 许可证
-
-本项目采用MIT许可证。详细信息请参见 [LICENSE](LICENSE) 文件。
-
 ## 👥 维护团队
 
 - **维护者**: Tristan.Qiu
 - **团队**: AIC (AI Computing)
 - **版本**: 1.0.0
-
-## 🤝 贡献
-
-欢迎贡献代码！请参考以下步骤：
-
-1. Fork本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 创建Pull Request
-
-## 📞 支持
-
-如果您遇到问题或有任何建议，请：
-
-1. 查看 [示例文件](example_test.py)
-2. 阅读文档
-3. 提交Issue到GitHub仓库
 
 ---
 
