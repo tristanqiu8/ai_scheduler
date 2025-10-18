@@ -18,7 +18,7 @@ import argparse
 from pathlib import Path
 
 # Version and metadata
-__version__ = "1.0"
+__version__ = "1.3"
 __maintainer__ = "Tristan.Qiu, Xiong.Guo, Neal.Nie"
 __team__ = "AIC"
 __description__ = "A Multi-task Neural Network Task Simulator with Automatic Optimization"

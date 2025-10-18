@@ -1,11 +1,11 @@
 # AI Scheduler
 
-AI Scheduler 是一套针对多任务神经网络场景的调度与优化引擎，能够在 NPU、DSP 等异构资源之间协调任务执行，并输出可视化的时间线与统计数据。
+AI Scheduler 是一套针对多任务神经网络场景的调度与优化引擎，能够在 NPU、DSP、ISP、IP等异构资源之间协调任务执行，并输出可视化的时间线与统计数据。
 
 ## ✨ 核心能力
 
-- 🚀 **多资源调度**：支持 NPU / DSP 协同执行与资源负载均衡。
-- 🎯 **优先级优化**：提供基于满足率的优先级搜索与评估。
+- 🚀 **多资源调度**：支持 NPU / DSP / ISP / CPU / IP等协同执行与资源负载均衡。
+- 🎯 **优先级优化**：提供基于满足率的优先级搜索与评估（目前仅DSP和NPU支持）。
 - 📊 **可视化输出**：生成 Chrome Tracing JSON 与时间线 PNG（需本地安装 `matplotlib`）。
 - 🧪 **场景复现**：内置多份 JSON 配置用于快速回放及回归测试。
 
@@ -21,7 +21,7 @@ pip install -e .
 ### 2. 构建 wheel 包
 ```bash
 # 可选：清理旧产物
-rm -rf build dist *.egg-info
+rm -rf build *.egg-info
 
 # 方式一：使用 build 模块
 python -m build --wheel
@@ -258,7 +258,7 @@ pip install dist/ai_scheduler-*.whl
 
 - **维护者**: Tristan.Qiu
 - **团队**: AIC (AI Computing)
-- **版本**: 1.0.0
+- **版本**: 1.3
 
 ---
 
