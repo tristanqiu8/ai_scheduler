@@ -85,7 +85,9 @@ class EnhancedTaskLauncher:
         self.task_duration_cache: Dict[str, float] = {}
         # 依赖完成时间缓存（用于递归估算加速）
         self._dep_completion_cache: Dict[Tuple[str, int], float] = {}
-        
+        # 任务发射时间缓存（避免重复递归计算）
+        self._launch_time_cache: Dict[Tuple[str, int], float] = {}
+
     def register_task(self, task: NNTask):
         """注册任务"""
         config = TaskLaunchConfig(
@@ -162,6 +164,7 @@ class EnhancedTaskLauncher:
         """创建发射计划 - 使用智能依赖预测"""
         # 创建计划前清空依赖完成时间缓存，避免跨次调用污染
         self._dep_completion_cache.clear()
+        self._launch_time_cache.clear()
         if strategy == "eager":
             return self._create_smart_eager_plan(time_window)
         elif strategy == "lazy":
@@ -288,7 +291,7 @@ class EnhancedTaskLauncher:
             dep_instance = self._get_dependency_instance(task_id, instance, dep_task_id)
             
             # 估算依赖任务的完成时间（递归计算依赖的发射时间 + 经验执行时长）
-            dep_completion = self._estimate_dependency_completion(dep_task_id, dep_instance)
+            dep_completion = self._get_dependency_completion(dep_task_id, dep_instance)
             
             # 确保在依赖完成后发射（留1ms余量）
             launch_time = max(launch_time, dep_completion + 1.0)
@@ -297,6 +300,12 @@ class EnhancedTaskLauncher:
         if instance > 0:
             min_time = instance * config.min_interval
             launch_time = max(launch_time, min_time)
+
+        cache_key = (task_id, instance)
+        self._launch_time_cache[cache_key] = launch_time
+        # 发射时间更新后，移除旧的完成时间缓存，避免过期
+        if cache_key in self._dep_completion_cache:
+            self._dep_completion_cache.pop(cache_key, None)
             
         return launch_time
 
@@ -436,32 +445,43 @@ class EnhancedTaskLauncher:
             dep_instance = instance_id
         
         return dep_instance
-        
-    def _estimate_dependency_completion(self, task_id: str, instance_id: int) -> float:
-        """估算依赖任务的完成时间
 
-        完成时间 = 依赖实例的发射时间（递归考虑依赖） + 经验执行时长
-        其中经验执行时长来自 _cache_task_duration 的缓存（NPU≈60/DSP≈40 假设 +10% 裕量）。
-        """
+    def _infer_base_launch_time(self, task_id: str, instance_id: int) -> float:
+        """根据任务配置推测实例的基础发射时间"""
+        config = self.task_configs.get(task_id)
+        if not config or not math.isfinite(config.min_interval) or config.min_interval <= 0:
+            return 0.0
+
+        base_time = instance_id * config.min_interval
+        if config.has_custom_offset:
+            base_time += config.initial_offset_ms
+        return base_time
+
+    def _get_dependency_completion(self, task_id: str, instance_id: int) -> float:
+        """获取依赖任务实例的完成时间，带缓存"""
         cache_key = (task_id, instance_id)
-        if cache_key in self._dep_completion_cache:
-            return self._dep_completion_cache[cache_key]
+
+        cached_completion = self._dep_completion_cache.get(cache_key)
+        if cached_completion is not None:
+            return cached_completion
 
         if task_id not in self.task_configs:
             return 0.0
-            
-        config = self.task_configs[task_id]
-        
-        # 1. 计算依赖任务的发射时间
-        # 注意：依赖任务可能也有自己的依赖，需要递归计算
-        dep_launch_time = self._calculate_launch_time_with_dependencies(
-            task_id, instance_id, instance_id * config.min_interval, float('inf')
-        )
-        
-        # 2. 加上执行时间
-        execution_time = self.task_duration_cache.get(task_id, 10.0)  # 默认10ms
-        completion = dep_launch_time + execution_time
+
+        launch_time = self._launch_time_cache.get(cache_key)
+        if launch_time is None:
+            base_time = self._infer_base_launch_time(task_id, instance_id)
+            launch_time = self._calculate_launch_time_with_dependencies(
+                task_id,
+                instance_id,
+                base_time,
+                float('inf')
+            )
+
+        execution_time = self.task_duration_cache.get(task_id, 10.0)
+        completion = launch_time + execution_time
         self._dep_completion_cache[cache_key] = completion
+        self._launch_time_cache[cache_key] = launch_time
         return completion
         
     def _create_lazy_plan(self, time_window: float) -> LaunchPlan:
@@ -528,8 +548,16 @@ class EnhancedTaskLauncher:
             # 对组内任务进行拓扑排序（仅保留同组成员的相对顺序）
             sorted_group = [t for t in self._topological_sort_tasks() if t in tasks]
             
-            # 计算组内偏移（将同优先级任务以 5ms 间隔交错开）
-            offset_step = 5.0  # 5ms偏移
+            valid_intervals = [
+                self.task_configs[t].min_interval
+                for t in sorted_group
+                if math.isfinite(self.task_configs[t].min_interval) and self.task_configs[t].min_interval > 0
+            ]
+            if valid_intervals:
+                reference_interval = min(valid_intervals)
+                offset_step = max(1.0, min(reference_interval * 0.5, 10.0))
+            else:
+                offset_step = 5.0  # 兜底
             
             for i, task_id in enumerate(sorted_group):
                 config = self.task_configs[task_id]

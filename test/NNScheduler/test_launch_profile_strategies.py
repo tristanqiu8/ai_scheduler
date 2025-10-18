@@ -79,7 +79,7 @@ def test_eager_and_balanced_respect_launch_profile_offsets():
     bal_plan = bal_launcher.create_launch_plan(70.0, "balanced")
 
     assert bal_plan.task_schedules["custom"][0] == pytest.approx(12.0, abs=1e-6)
-    assert bal_plan.task_schedules["auto"][0] == pytest.approx(5.0, abs=1e-6)
+    assert bal_plan.task_schedules["auto"][0] == pytest.approx(10.0, abs=1e-6)
 
 
 def test_sync_and_fixed_offsets_differ():
