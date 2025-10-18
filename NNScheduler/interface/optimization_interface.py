@@ -340,7 +340,7 @@ class OptimizationInterface:
             slack_enabled = (
                 random_slack_enabled
                 and random_slack_std > 0
-                and launch_strategy not in {"sync", "fixed"}
+                and launch_strategy != "sync"
             )
 
             plan = launcher.create_launch_plan(time_window, launch_strategy)

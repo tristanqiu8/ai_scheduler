@@ -24,6 +24,7 @@ class TaskLaunchConfig:
     dependencies: List[str] = field(default_factory=list)
     initial_offset_ms: float = 0.0
     respect_dependencies: bool = False
+    has_custom_offset: bool = False
     min_interval: float = field(init=False)  # 自动计算，不需要初始化时提供
     
     def __post_init__(self):
@@ -90,7 +91,8 @@ class TaskLauncher:
             fps_requirement=task.fps_requirement,
             dependencies=sorted(task.dependencies),
             initial_offset_ms=max(0.0, getattr(task, "launch_offset_ms", 0.0) or 0.0),
-            respect_dependencies=bool(getattr(task, "launch_respect_dependencies", False))
+            respect_dependencies=bool(getattr(task, "launch_respect_dependencies", False)),
+            has_custom_offset=bool(getattr(task, "launch_offset_configured", False))
         )
         
         self.task_configs[task.task_id] = config

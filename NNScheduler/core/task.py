@@ -29,6 +29,7 @@ class NNTask:
         self.latency_requirement: float = 100.0
         self.launch_offset_ms: float = 0.0
         self.launch_respect_dependencies: bool = False
+        self.launch_offset_configured: bool = False
         
         # 分段相关
         self.preset_cut_configurations: Dict[str, List[List[str]]] = {}
@@ -158,13 +159,15 @@ class NNTask:
         self.dependencies.update(task_ids)
 
     def set_launch_phase(self, offset_ms: float = 0.0, respect_dependencies: bool = False):
-        """配置任务在 fixed 策略下的相位"""
+        """配置任务的固定相位信息"""
         try:
             offset_val = float(offset_ms)
         except (TypeError, ValueError):
             offset_val = 0.0
+
         self.launch_offset_ms = max(0.0, offset_val)
         self.launch_respect_dependencies = bool(respect_dependencies)
+        self.launch_offset_configured = True
     
     def apply_model(self, model_data):
         """应用模型定义（segments和可选的cut points）

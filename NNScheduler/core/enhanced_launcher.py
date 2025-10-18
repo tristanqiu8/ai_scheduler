@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
 from collections import defaultdict
 import heapq
+import math
 
 from NNScheduler.core.enums import TaskPriority, ResourceType
 from NNScheduler.core.task import NNTask
@@ -24,6 +25,7 @@ class TaskLaunchConfig:
     dependencies: List[str] = field(default_factory=list)
     initial_offset_ms: float = 0.0
     respect_dependencies: bool = False
+    has_custom_offset: bool = False
     min_interval: float = field(init=False)
     
     def __post_init__(self):
@@ -92,7 +94,8 @@ class EnhancedTaskLauncher:
             fps_requirement=task.fps_requirement,
             dependencies=sorted(task.dependencies),
             initial_offset_ms=max(0.0, getattr(task, "launch_offset_ms", 0.0) or 0.0),
-            respect_dependencies=bool(getattr(task, "launch_respect_dependencies", False))
+            respect_dependencies=bool(getattr(task, "launch_respect_dependencies", False)),
+            has_custom_offset=bool(getattr(task, "launch_offset_configured", False))
         )
         
         self.task_configs[task.task_id] = config
@@ -188,23 +191,37 @@ class EnhancedTaskLauncher:
         # 为每个任务规划发射时间
         for task_id in sorted_tasks:
             config = self.task_configs[task_id]
-            
-            # 计算需要的实例数
-            if config.min_interval >= time_window:
+
+            if not math.isfinite(config.min_interval) or config.min_interval <= 0:
+                continue
+
+            if config.has_custom_offset:
+                available_window = time_window - config.initial_offset_ms
+                if available_window <= 0:
+                    continue
+                max_instances = int(available_window / config.min_interval) + 1
+            elif config.min_interval >= time_window:
                 max_instances = 1
             else:
                 max_instances = int(time_window / config.min_interval) + 1
-                
+
             # 为每个实例找到合适的发射时间
             for instance in range(max_instances):
-                # 基础发射时间
-                base_time = instance * config.min_interval
-                
-                # 考虑依赖关系调整发射时间
-                launch_time = self._calculate_launch_time_with_dependencies(
-                    task_id, instance, base_time, time_window
-                )
-                
+                if config.has_custom_offset:
+                    base_time = config.initial_offset_ms + instance * config.min_interval
+                else:
+                    base_time = instance * config.min_interval
+
+                if base_time >= time_window:
+                    break
+
+                if config.has_custom_offset and not config.respect_dependencies:
+                    launch_time = base_time
+                else:
+                    launch_time = self._calculate_launch_time_with_dependencies(
+                        task_id, instance, base_time, time_window
+                    )
+
                 if launch_time < time_window:
                     plan.add_launch(task_id, launch_time, instance)
                     
@@ -516,22 +533,40 @@ class EnhancedTaskLauncher:
             
             for i, task_id in enumerate(sorted_group):
                 config = self.task_configs[task_id]
-                base_offset = i * offset_step
-                
+                if config.has_custom_offset:
+                    base_offset = config.initial_offset_ms
+                else:
+                    base_offset = i * offset_step
+
+                if not math.isfinite(config.min_interval) or config.min_interval <= 0:
+                    continue
+                if base_offset >= time_window:
+                    continue
+
                 # 计算实例数
-                if config.min_interval >= time_window:
+                available_window = time_window - base_offset
+                if available_window <= 0:
+                    continue
+
+                if config.min_interval >= available_window:
                     max_instances = 1
                 else:
-                    max_instances = int(time_window / config.min_interval) + 1
-                    
+                    max_instances = int(available_window / config.min_interval) + 1
+
                 # 为每个实例规划发射时间（基础时间 + 依赖就绪校正）
                 for instance in range(max_instances):
                     base_time = base_offset + instance * config.min_interval
-                    
-                    launch_time = self._calculate_launch_time_with_dependencies(
-                        task_id, instance, base_time, time_window
-                    )
-                    
+
+                    if base_time >= time_window:
+                        break
+
+                    if config.has_custom_offset and not config.respect_dependencies:
+                        launch_time = base_time
+                    else:
+                        launch_time = self._calculate_launch_time_with_dependencies(
+                            task_id, instance, base_time, time_window
+                        )
+
                     if launch_time < time_window:
                         plan.add_launch(task_id, launch_time, instance)
                         

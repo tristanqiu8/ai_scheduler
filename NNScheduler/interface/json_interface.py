@@ -131,23 +131,35 @@ class JsonInterface:
         respect_deps_val = config.get("launch_respect_dependencies")
 
         launch_profile = config.get("launch_profile")
+        profile_has_offset = False
+        profile_has_respect = False
         if isinstance(launch_profile, dict):
             if launch_offset_val is None and "offset_ms" in launch_profile:
                 launch_offset_val = launch_profile.get("offset_ms")
+                profile_has_offset = True
             if respect_deps_val is None and "respect_dependencies" in launch_profile:
                 respect_deps_val = launch_profile.get("respect_dependencies")
+                profile_has_respect = True
 
-        try:
-            offset_float = float(launch_offset_val) if launch_offset_val is not None else 0.0
-        except (TypeError, ValueError):
-            offset_float = 0.0
+        should_configure_phase = (
+            launch_offset_val is not None or
+            respect_deps_val is not None or
+            profile_has_offset or
+            profile_has_respect
+        )
 
-        if isinstance(respect_deps_val, str):
-            respect_deps_bool = respect_deps_val.strip().lower() not in {"false", "0", "no"}
-        else:
-            respect_deps_bool = bool(respect_deps_val) if respect_deps_val is not None else False
+        if should_configure_phase:
+            try:
+                offset_float = float(launch_offset_val) if launch_offset_val is not None else 0.0
+            except (TypeError, ValueError):
+                offset_float = 0.0
 
-        task.set_launch_phase(offset_float, respect_deps_bool)
+            if isinstance(respect_deps_val, str):
+                respect_deps_bool = respect_deps_val.strip().lower() not in {"false", "0", "no"}
+            else:
+                respect_deps_bool = bool(respect_deps_val) if respect_deps_val is not None else False
+
+            task.set_launch_phase(offset_float, respect_deps_bool)
 
         # 应用模型
         if "model" in config:

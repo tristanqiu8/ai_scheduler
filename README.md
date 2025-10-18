@@ -118,12 +118,22 @@ pytest test/NNScheduler/test_simple_optimization.py -k priority  # 定点用例
 
 关键字段说明：
 
-- `optimization.launch_strategy`：`eager` / `lazy` / `balanced` / `sync`，同时会写入生成文件名。
-- `optimization.enable_random_slack`：首段高斯扰动开关，默认开启，可显式关闭。
-- `optimization.slack`：首段扰动的方差，单位毫秒，默认值 `0.2`。
+- `optimization.launch_strategy`：`eager` / `lazy` / `balanced` / `sync` / `fixed`，同时写入生成文件名。
+- `optimization.enable_random_slack`：首段高斯扰动开关，默认开启；`fixed` 模式同样支持扰动，`sync` 始终关闭。
+- `optimization.slack`：首段扰动的标准差，单位毫秒，默认值 `0.2`。
 - `optimization.random_slack_seed`：可选整数种子，设置后可复现扰动序列。
+- `scenario.tasks[*].launch_profile`：可选自定义发射相位，支持 `offset_ms` 与 `respect_dependencies`（详见下节）。
 - `scenario.tasks[*].model.segments`：描述任务在各资源上的序列执行片段，可配合 `cut_points` 进行细粒度分段。
 - `dependencies`：声明任务间的执行依赖，执行器会在依赖完成后立即入队下一段。
+
+### 发射策略与 launch_profile
+
+- **自定义偏移**：`launch_profile.offset_ms` 允许任务在 `eager` / `balanced` / `fixed` 模式下按照固定相位周期性发射；未配置的任务仍由调度器自动推导发射时刻。
+- **依赖感知**：当 `launch_profile.respect_dependencies` 为 `true` 时，调度器会在保证偏移的同时推迟到依赖任务完成；默认保持严格固定相位。
+- **Sync vs Fixed**：`sync` 策略仍根据 ISP 时长自动推导偏移且禁用扰动，适用于自适应流水线；`fixed` 策略通过 `launch_profile` 显式传参锁定相位，并可叠加随机 slack。
+- **示例配置**：
+  - `test/sample_config/config_fixed_launch_example.json`：展示 `fixed` 策略与依赖对齐。
+  - `test/sample_config/config_eager_launch_profile.json`：展示 `eager` 策略在多个任务间应用自定义偏移。
 
 ## ❗ 已知限制
 
@@ -160,13 +170,15 @@ configs = api.list_sample_configs()
 
 ## 🔍 样本配置
 
-包内提供了5个样本配置文件，涵盖不同的硬件配置和任务类型：
+包内提供了多份样本配置文件，涵盖不同的硬件配置、调度策略与 launch profile 演示：
 
 1. **config_1npu_1dsp.json**: 1个NPU + 1个DSP配置
 2. **config_1npu_1dsp_alt.json**: 1个NPU + 1个DSP替代配置
 3. **config_2npu_1dsp.json**: 2个NPU + 1个DSP配置
 4. **config_2npu_1dsp_alt.json**: 2个NPU + 1个DSP替代配置
 5. **config_2npu_2dsp.json**: 2个NPU + 2个DSP配置
+6. **config_fixed_launch_example.json**: `fixed` 策略 + 依赖感知偏移示例
+7. **config_eager_launch_profile.json**: `eager` 策略 + 多任务 launch_profile 示例
 
 ## 💡 高级用法
 

@@ -124,9 +124,6 @@ class ScheduleExecutor:
         if self.launch_strategy == "sync":
             self.random_slack_enabled = False
 
-        if self.launch_strategy in {"sync", "fixed"}:
-            self.random_slack_enabled = False
-
         if self.random_slack_enabled:
             self._slack_rng = random.Random(random_slack_seed)
         else:
