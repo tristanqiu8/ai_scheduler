@@ -93,7 +93,8 @@ def test_fixed_mode_respects_dependencies_when_requested():
 
     expected_upstream = [0.0 + i * 25.0 for i in range(4)]
     expected_independent = [12.0 + i * 40.0 for i in range(2)]
-    expected_downstream = [expected_upstream[i] + 8.8 + 1.0 for i in range(3)]
+    guard = max(0.2, min(3.0, 8.8 * 0.1))
+    expected_downstream = [expected_upstream[i] + 8.8 + guard for i in range(3)]
 
     assert upstream_times == pytest.approx(expected_upstream, abs=1e-6)
     assert independent_times == pytest.approx(expected_independent, abs=1e-6)

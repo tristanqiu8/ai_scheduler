@@ -289,12 +289,13 @@ class EnhancedTaskLauncher:
                 
             # 使用帧率感知的依赖实例映射
             dep_instance = self._get_dependency_instance(task_id, instance, dep_task_id)
-            
+
             # 估算依赖任务的完成时间（递归计算依赖的发射时间 + 经验执行时长）
             dep_completion = self._get_dependency_completion(dep_task_id, dep_instance)
-            
+            guard_ms = self._get_dependency_guard(dep_task_id)
+
             # 确保在依赖完成后发射（留1ms余量）
-            launch_time = max(launch_time, dep_completion + 1.0)
+            launch_time = max(launch_time, dep_completion + guard_ms)
             
         # 确保不违反最小间隔（帧率约束）
         if instance > 0:
@@ -456,6 +457,13 @@ class EnhancedTaskLauncher:
         if config.has_custom_offset:
             base_time += config.initial_offset_ms
         return base_time
+
+    def _get_dependency_guard(self, task_id: str) -> float:
+        """根据依赖任务的执行时长自适应设置安全缓冲"""
+        execution_time = self.task_duration_cache.get(task_id, 10.0)
+        guard = execution_time * 0.1
+        guard = max(0.2, min(3.0, guard))
+        return guard
 
     def _get_dependency_completion(self, task_id: str, instance_id: int) -> float:
         """获取依赖任务实例的完成时间，带缓存"""
