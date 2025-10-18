@@ -116,12 +116,15 @@ class ScheduleExecutor:
         self.tasks = tasks
 
         self.launch_strategy = (launch_strategy or "balanced").lower()
-        if self.launch_strategy not in {"eager", "lazy", "balanced", "sync"}:
+        if self.launch_strategy not in {"eager", "lazy", "balanced", "sync", "fixed"}:
             self.launch_strategy = "balanced"
 
         self.random_slack_std = max(0.0, float(random_slack_std))
         self.random_slack_enabled = bool(random_slack_enabled and self.random_slack_std > 0.0)
         if self.launch_strategy == "sync":
+            self.random_slack_enabled = False
+
+        if self.launch_strategy in {"sync", "fixed"}:
             self.random_slack_enabled = False
 
         if self.random_slack_enabled:

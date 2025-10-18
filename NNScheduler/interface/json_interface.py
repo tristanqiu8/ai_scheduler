@@ -126,7 +126,29 @@ class JsonInterface:
         if "dependencies" in config:
             for dep in config["dependencies"]:
                 task.add_dependency(dep)
-        
+
+        launch_offset_val = config.get("launch_offset_ms")
+        respect_deps_val = config.get("launch_respect_dependencies")
+
+        launch_profile = config.get("launch_profile")
+        if isinstance(launch_profile, dict):
+            if launch_offset_val is None and "offset_ms" in launch_profile:
+                launch_offset_val = launch_profile.get("offset_ms")
+            if respect_deps_val is None and "respect_dependencies" in launch_profile:
+                respect_deps_val = launch_profile.get("respect_dependencies")
+
+        try:
+            offset_float = float(launch_offset_val) if launch_offset_val is not None else 0.0
+        except (TypeError, ValueError):
+            offset_float = 0.0
+
+        if isinstance(respect_deps_val, str):
+            respect_deps_bool = respect_deps_val.strip().lower() not in {"false", "0", "no"}
+        else:
+            respect_deps_bool = bool(respect_deps_val) if respect_deps_val is not None else False
+
+        task.set_launch_phase(offset_float, respect_deps_bool)
+
         # 应用模型
         if "model" in config:
             model_result = JsonInterface.parse_model_config(config["model"])

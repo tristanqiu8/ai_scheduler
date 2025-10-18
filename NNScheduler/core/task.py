@@ -27,6 +27,8 @@ class NNTask:
         self.dependencies: Set[str] = set()
         self.fps_requirement: float = 30.0
         self.latency_requirement: float = 100.0
+        self.launch_offset_ms: float = 0.0
+        self.launch_respect_dependencies: bool = False
         
         # 分段相关
         self.preset_cut_configurations: Dict[str, List[List[str]]] = {}
@@ -154,6 +156,15 @@ class NNTask:
     def add_dependencies(self, task_ids: List[str]):
         """批量添加依赖"""
         self.dependencies.update(task_ids)
+
+    def set_launch_phase(self, offset_ms: float = 0.0, respect_dependencies: bool = False):
+        """配置任务在 fixed 策略下的相位"""
+        try:
+            offset_val = float(offset_ms)
+        except (TypeError, ValueError):
+            offset_val = 0.0
+        self.launch_offset_ms = max(0.0, offset_val)
+        self.launch_respect_dependencies = bool(respect_dependencies)
     
     def apply_model(self, model_data):
         """应用模型定义（segments和可选的cut points）

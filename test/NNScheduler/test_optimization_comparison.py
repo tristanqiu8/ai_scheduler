@@ -69,7 +69,8 @@ class OptimizationComparator:
                 "max_time_seconds": 300,
                 "target_satisfaction": 0.95,
                 "time_window": 1000.0,
-                "segment_mode": True
+                "segment_mode": True,
+                "enable_random_slack": False
             },
             "resources": {
                 "resources": [

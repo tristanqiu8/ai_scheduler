@@ -155,7 +155,7 @@ class OptimizationInterface:
 
         # 发射策略（eager|lazy|balanced），默认balanced
         launch_strategy = str(optimization_config.get("launch_strategy", "balanced")).strip().lower()
-        if launch_strategy not in {"eager", "lazy", "balanced", "sync"}:
+        if launch_strategy not in {"eager", "lazy", "balanced", "sync", "fixed"}:
             print(f"[WARN] 无效的launch_strategy: {launch_strategy}，已回退为balanced")
             launch_strategy = "balanced"
 
@@ -303,7 +303,7 @@ class OptimizationInterface:
             launcher.register_task(task)
 
         launch_strategy = str(optimization_config.get("launch_strategy", "balanced")).strip().lower()
-        if launch_strategy not in {"eager", "lazy", "balanced", "sync"}:
+        if launch_strategy not in {"eager", "lazy", "balanced", "sync", "fixed"}:
             print(f"[WARN] 无效的launch_strategy: {launch_strategy}，已回退为balanced")
             launch_strategy = "balanced"
 
@@ -337,7 +337,11 @@ class OptimizationInterface:
             except (TypeError, ValueError):
                 random_slack_seed = None
 
-            slack_enabled = (random_slack_enabled and random_slack_std > 0 and launch_strategy != "sync")
+            slack_enabled = (
+                random_slack_enabled
+                and random_slack_std > 0
+                and launch_strategy not in {"sync", "fixed"}
+            )
 
             plan = launcher.create_launch_plan(time_window, launch_strategy)
             executor = ScheduleExecutor(
@@ -439,7 +443,7 @@ class JsonPriorityOptimizer:
         self.user_priority_config = user_priority_config or {}
         # 规范化发射策略
         self.launch_strategy = str(launch_strategy).strip().lower()
-        if self.launch_strategy not in {"eager", "lazy", "balanced", "sync"}:
+        if self.launch_strategy not in {"eager", "lazy", "balanced", "sync", "fixed"}:
             self.launch_strategy = "balanced"
 
         self.random_slack_enabled = bool(random_slack_enabled)

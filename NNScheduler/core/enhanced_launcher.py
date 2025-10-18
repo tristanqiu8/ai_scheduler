@@ -22,6 +22,8 @@ class TaskLaunchConfig:
     priority: TaskPriority
     fps_requirement: float
     dependencies: List[str] = field(default_factory=list)
+    initial_offset_ms: float = 0.0
+    respect_dependencies: bool = False
     min_interval: float = field(init=False)
     
     def __post_init__(self):
@@ -88,7 +90,9 @@ class EnhancedTaskLauncher:
             task_id=task.task_id,
             priority=task.priority,
             fps_requirement=task.fps_requirement,
-            dependencies=task.dependencies
+            dependencies=sorted(task.dependencies),
+            initial_offset_ms=max(0.0, getattr(task, "launch_offset_ms", 0.0) or 0.0),
+            respect_dependencies=bool(getattr(task, "launch_respect_dependencies", False))
         )
         
         self.task_configs[task.task_id] = config
@@ -164,6 +168,12 @@ class EnhancedTaskLauncher:
                 return self._create_sync_plan(time_window)
             except Exception as exc:
                 print(f"[WARN] Sync launch计划失败，回退到balanced策略: {exc}")
+                return self._create_balanced_plan(time_window)
+        elif strategy == "fixed":
+            try:
+                return self._create_fixed_plan(time_window)
+            except Exception as exc:
+                print(f"[WARN] Fixed launch计划失败，回退到balanced策略: {exc}")
                 return self._create_balanced_plan(time_window)
         else:
             return self._create_balanced_plan(time_window)
@@ -329,6 +339,59 @@ class EnhancedTaskLauncher:
 
             if cycle_length <= epsilon:
                 break
+
+        plan.sort_events()
+        return plan
+
+    def _create_fixed_plan(self, time_window: float) -> LaunchPlan:
+        """创建固定相位的发射计划"""
+        plan = LaunchPlan()
+        if not self.tasks or time_window <= 0:
+            return plan
+
+        epsilon = 1e-6
+        ordered_tasks = sorted(
+            self.task_configs.keys(),
+            key=lambda tid: (self.task_configs[tid].priority.value, tid)
+        )
+
+        for task_id in ordered_tasks:
+            config = self.task_configs[task_id]
+
+            if config.fps_requirement <= 0:
+                continue
+
+            offset = max(0.0, config.initial_offset_ms)
+            if offset >= time_window:
+                continue
+
+            if config.min_interval == float("inf"):
+                continue
+
+            if config.min_interval <= epsilon:
+                continue
+
+            instance = 0
+            base_time = offset
+
+            while base_time < time_window - epsilon:
+                launch_time = base_time
+
+                if config.respect_dependencies:
+                    launch_time = self._calculate_launch_time_with_dependencies(
+                        task_id,
+                        instance,
+                        base_time,
+                        time_window
+                    )
+
+                if launch_time >= time_window - epsilon:
+                    break
+
+                plan.add_launch(task_id, launch_time, instance)
+
+                instance += 1
+                base_time = offset + instance * config.min_interval
 
         plan.sort_events()
         return plan

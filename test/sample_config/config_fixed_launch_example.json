@@ -1,0 +1,106 @@
+{
+  "optimization": {
+    "max_iterations": 1,
+    "max_time_seconds": 5,
+    "target_satisfaction": 1.0,
+    "time_window": 80.0,
+    "segment_mode": true,
+    "enable_detailed_analysis": false,
+    "search_priority": false,
+    "log_level": "normal",
+    "launch_strategy": "fixed"
+  },
+  "resources": {
+    "resources": [
+      { "resource_id": "ISP_0", "resource_type": "ISP", "bandwidth": 50.0 },
+      { "resource_id": "NPU_0", "resource_type": "NPU", "bandwidth": 60.0 }
+    ]
+  },
+  "scenario": {
+    "use_camera_tasks": false,
+    "scenario_name": "Fixed Phase Demo",
+    "description": "Three tasks launched with fixed offsets; one respects dependencies.",
+    "tasks": [
+      {
+        "task_id": "sensor_preproc",
+        "name": "sensor_preproc",
+        "priority": "CRITICAL",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 40.0,
+        "latency": 20.0,
+        "launch_profile": {
+          "offset_ms": 0.0,
+          "respect_dependencies": false
+        },
+        "model": {
+          "segments": [
+            {
+              "resource_type": "ISP",
+              "segment_id": "isp_stage",
+              "duration_table": { "50": 8.0 },
+              "power": 0.0,
+              "ddr": 0.0
+            },
+            {
+              "resource_type": "NPU",
+              "segment_id": "npu_stage",
+              "duration_table": { "60": 2.0 },
+              "power": 0.0,
+              "ddr": 0.0
+            }
+          ]
+        }
+      },
+      {
+        "task_id": "tracking",
+        "name": "tracking",
+        "priority": "HIGH",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 40.0,
+        "latency": 25.0,
+        "dependencies": ["sensor_preproc"],
+        "launch_profile": {
+          "offset_ms": 0.0,
+          "respect_dependencies": true
+        },
+        "model": {
+          "segments": [
+            {
+              "resource_type": "NPU",
+              "segment_id": "tracking_core",
+              "duration_table": { "60": 4.0 },
+              "power": 0.0,
+              "ddr": 0.0
+            }
+          ]
+        }
+      },
+      {
+        "task_id": "overlay",
+        "name": "overlay",
+        "priority": "NORMAL",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 25.0,
+        "latency": 40.0,
+        "launch_profile": {
+          "offset_ms": 12.0,
+          "respect_dependencies": false
+        },
+        "model": {
+          "segments": [
+            {
+              "resource_type": "NPU",
+              "segment_id": "overlay_core",
+              "duration_table": { "60": 3.0 },
+              "power": 0.0,
+              "ddr": 0.0
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
