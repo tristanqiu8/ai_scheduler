@@ -9,8 +9,8 @@ from collections import defaultdict
 import heapq
 import random
 
-from NNScheduler.core.models import SubSegment
-from NNScheduler.core.enums import ResourceType, TaskPriority
+from NNScheduler.core.models import SubSegment, ResourceBinding
+from NNScheduler.core.enums import ResourceType, TaskPriority, RuntimeType
 from NNScheduler.core.resource_queue import ResourceQueueManager, QueuedTask
 from NNScheduler.core.schedule_tracer import ScheduleTracer
 from NNScheduler.core.launcher import LaunchPlan, LaunchEvent
@@ -144,6 +144,8 @@ class ScheduleExecutor:
         
         # 新增：跟踪已处理的段，避免重复
         self.processed_segments: Set[str] = set()
+        self.resource_bindings: Dict[Tuple[str, int], ResourceBinding] = {}
+        self.bound_resource_usage: Dict[str, Tuple[str, int]] = {}
         
     def execute_plan(self, launch_plan: LaunchPlan, max_time: float, 
                     segment_mode: Optional[bool] = None) -> Dict:
@@ -191,6 +193,113 @@ class ScheduleExecutor:
         self.current_time = 0.0
         self.next_events.clear()
         self.processed_segments.clear()
+        self.resource_bindings.clear()
+        self.bound_resource_usage.clear()
+
+    def _get_or_create_binding(self, instance: TaskInstance) -> ResourceBinding:
+        """Get or create a binding record for a DSP runtime task instance."""
+        key = instance.instance_key
+        binding = self.resource_bindings.get(key)
+        if binding is None:
+            binding = ResourceBinding(
+                task_id=instance.task_id,
+                bound_resources=set(),
+                binding_start=self.current_time,
+                binding_end=0.0
+            )
+            self.resource_bindings[key] = binding
+        return binding
+
+    @staticmethod
+    def _extract_resource_index(resource_id: str) -> Optional[int]:
+        """Extract numeric suffix index from resource identifier."""
+        parts = resource_id.split("_")
+        if not parts:
+            return None
+        suffix = parts[-1]
+        return int(suffix) if suffix.isdigit() else None
+
+    def _select_unbound_queue(self, resource_type: ResourceType, binding_key: Tuple[str, int],
+                              preferred_indices: Optional[Set[int]] = None) -> Optional['ResourceQueue']:
+        """Select a queue not bound to other DSP runtime instances, preferring specific indices."""
+        queues = self.queue_manager.get_queues_by_type(resource_type)
+        if not queues:
+            return None
+
+        def sort_key(queue):
+            index = self._extract_resource_index(queue.resource_id)
+            preferred_rank = 1
+            if preferred_indices:
+                preferred_rank = 0 if index in preferred_indices else 1
+            return (preferred_rank, queue.get_next_available_time())
+
+        for queue in sorted(queues, key=sort_key):
+            owner = self.bound_resource_usage.get(queue.resource_id)
+            if owner is None or owner == binding_key:
+                return queue
+        return None
+
+    def _get_queue_for_segment(self, instance: TaskInstance, segment: SubSegment) -> Optional['ResourceQueue']:
+        """Determine the queue a segment should be enqueued to, respecting DSP bindings."""
+        task_def = self.tasks.get(instance.task_id)
+        if not task_def or task_def.runtime_type != RuntimeType.DSP_RUNTIME:
+            return self._select_unbound_queue(segment.resource_type, instance.instance_key)
+
+        binding = self._get_or_create_binding(instance)
+        binding_key = instance.instance_key
+        resource_type = segment.resource_type
+
+        existing_id = binding.resource_map.get(resource_type)
+        if existing_id:
+            queue = self.queue_manager.get_queue(existing_id)
+            if queue is not None:
+                return queue
+            binding.bound_resources.discard(existing_id)
+            binding.resource_map.pop(resource_type, None)
+
+        preferred_indices: Optional[Set[int]] = None
+        complement_type = ResourceType.DSP if resource_type == ResourceType.NPU else ResourceType.NPU
+        complement_id = binding.resource_map.get(complement_type)
+        if complement_id:
+            idx = self._extract_resource_index(complement_id)
+            if idx is not None:
+                preferred_indices = {idx}
+
+        queue = self._select_unbound_queue(resource_type, binding_key, preferred_indices)
+        if queue is None:
+            return None
+
+        binding.bound_resources.add(queue.resource_id)
+        binding.resource_map[resource_type] = queue.resource_id
+        self.bound_resource_usage[queue.resource_id] = binding_key
+
+        if complement_type not in binding.resource_map:
+            complement_pref: Optional[Set[int]] = None
+            idx = self._extract_resource_index(queue.resource_id)
+            if idx is not None:
+                complement_pref = {idx}
+            complement_queue = self._select_unbound_queue(complement_type, binding_key, complement_pref)
+            if complement_queue is not None:
+                binding.bound_resources.add(complement_queue.resource_id)
+                binding.resource_map[complement_type] = complement_queue.resource_id
+                self.bound_resource_usage[complement_queue.resource_id] = binding_key
+
+        return queue
+
+    def _reserve_bound_resource(self, queue: 'ResourceQueue', binding_key: Tuple[str, int], end_time: float):
+        """Reserve a bound resource until the specified end time."""
+        if queue is None:
+            return
+
+        previous_busy = queue.busy_until
+        if end_time > previous_busy:
+            start_time = max(self.current_time, previous_busy)
+            if end_time > start_time:
+                queue.total_busy_time += end_time - start_time
+            queue.busy_until = end_time
+
+        queue.current_task = f"{binding_key[0]}#{binding_key[1]}_BIND"
+        self.bound_resource_usage[queue.resource_id] = binding_key
 
     def _dependencies_satisfied(self, task: NNTask, instance_id: int) -> bool:
         """检查给定任务实例的依赖是否完成"""
@@ -226,6 +335,13 @@ class ScheduleExecutor:
         completion_time = instance.completion_time if instance.completion_time is not None else self.current_time
         key = (instance.task_id, instance.instance_id)
         self.completed_instances[key] = completion_time
+
+        binding = self.resource_bindings.pop(key, None)
+        if binding is not None:
+            binding.binding_end = completion_time
+            for res_id in list(binding.bound_resources):
+                if self.bound_resource_usage.get(res_id) == key:
+                    del self.bound_resource_usage[res_id]
 
     def _activate_pending_instances(self):
         """检查等待依赖的实例，依赖满足后立即激活"""
@@ -353,7 +469,7 @@ class ScheduleExecutor:
             return
         
         # 寻找可用资源
-        queue = self.queue_manager.find_best_queue(segment.resource_type)
+        queue = self._get_queue_for_segment(instance, segment)
         if not queue:
             return
         
@@ -445,9 +561,28 @@ class ScheduleExecutor:
         
         task_def = self.tasks.get(task_id)
         task_name = task_def.name if task_def else None
+
+        binding_key = (task_id, instance_id)
+        binding = self.resource_bindings.get(binding_key)
+        complement_queue = None
+        complement_type: Optional[ResourceType] = None
+        if task_def and task_def.runtime_type == RuntimeType.DSP_RUNTIME and binding:
+            complement_type = ResourceType.DSP if segment.resource_type == ResourceType.NPU else ResourceType.NPU
+            complement_id = binding.resource_map.get(complement_type)
+            if complement_id:
+                complement_queue = self.queue_manager.get_queue(complement_id)
+            if complement_queue and complement_queue.resource_id != queue.resource_id and complement_queue.is_busy():
+                return
         
         # 执行任务
         end_time = queue.execute_task(queued_task, self.current_time)
+
+        if task_def and task_def.runtime_type == RuntimeType.DSP_RUNTIME and binding and complement_type is not None:
+            complement_id = binding.resource_map.get(complement_type)
+            if complement_id:
+                bound_queue = self.queue_manager.get_queue(complement_id)
+                if bound_queue and bound_queue.resource_id != queue.resource_id:
+                    self._reserve_bound_resource(bound_queue, binding_key, end_time)
         
         # 记录执行
         self.tracer.record_execution(

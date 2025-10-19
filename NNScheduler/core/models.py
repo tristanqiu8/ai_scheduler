@@ -185,6 +185,7 @@ class ResourceBinding:
     bound_resources: Set[str]  # Set of resource IDs that are bound together
     binding_start: float
     binding_end: float
+    resource_map: Dict[ResourceType, str] = field(default_factory=dict)
 
 @dataclass
 class SegmentationDecision:
