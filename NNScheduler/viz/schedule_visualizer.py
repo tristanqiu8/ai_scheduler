@@ -774,7 +774,9 @@ class ScheduleVisualizer:
         stats = self.tracer.get_statistics()
         timeline = self.tracer.get_timeline()
         
-        with open(filename, 'w', encoding='utf-8') as f:
+        output_path = ensure_artifact_path(filename)
+
+        with open(output_path, 'w', encoding='utf-8') as f:
             f.write("AI Scheduler Execution Report\n")
             f.write("=" * 60 + "\n\n")
             
@@ -808,7 +810,7 @@ class ScheduleVisualizer:
                 else:
                     f.write("  No tasks executed\n")
         
-        print(f"Summary report saved to: {filename}")
+        print(f"Summary report saved to: {output_path}")
 
 
 def _ms_to_ns(value_ms: float) -> int:

@@ -12,6 +12,9 @@ from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, asdict, field
 from collections import defaultdict
 
+DISABLE_VISUALS_ENV = "AI_SCHEDULER_DISABLE_VISUALS"
+DISABLE_RANDOM_SLACK_ENV = "AI_SCHEDULER_DISABLE_RANDOM_SLACK"
+
 from NNScheduler.core.resource_queue import ResourceQueueManager
 from NNScheduler.core.schedule_tracer import ScheduleTracer
 from NNScheduler.core.launcher import TaskLauncher
@@ -150,6 +153,12 @@ class OptimizationInterface:
             random_slack_enabled = random_slack_enabled.strip().lower() not in {"false", "0", "no"}
         random_slack_seed = optimization_config.get("random_slack_seed")
 
+        disable_slack_env = os.environ.get(DISABLE_RANDOM_SLACK_ENV, "").strip().lower()
+        if disable_slack_env in {"1", "true", "yes"}:
+            random_slack_enabled = False
+            random_slack_std = 0.0
+            random_slack_seed = None
+
         # 从配置中读取log_level设置，默认为"normal"
         log_level = optimization_config.get("log_level", "normal")
 
@@ -233,9 +242,9 @@ class OptimizationInterface:
 
         # 生成可视化文件
         visualization_files = {}
-        disable_visuals = os.environ.get("AI_SCHEDULER_DISABLE_VISUALS", "").strip().lower()
+        disable_visuals = os.environ.get(DISABLE_VISUALS_ENV, "").strip().lower()
         if disable_visuals in {"1", "true", "yes"}:
-            print("[INFO] 可视化生成已通过环境变量 AI_SCHEDULER_DISABLE_VISUALS 禁用")
+            print(f"[INFO] 可视化生成已通过环境变量 {DISABLE_VISUALS_ENV} 禁用")
         else:
             visualization_files = self._generate_visualizations(
                 tasks,
@@ -335,6 +344,12 @@ class OptimizationInterface:
             try:
                 random_slack_seed = None if random_slack_seed is None else int(random_slack_seed)
             except (TypeError, ValueError):
+                random_slack_seed = None
+
+            disable_slack_env = os.environ.get(DISABLE_RANDOM_SLACK_ENV, "").strip().lower()
+            if disable_slack_env in {"1", "true", "yes"}:
+                random_slack_enabled = False
+                random_slack_std = 0.0
                 random_slack_seed = None
 
             slack_enabled = (

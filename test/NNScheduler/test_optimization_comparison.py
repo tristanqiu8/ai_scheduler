@@ -10,6 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 import json
 import time
+import random
 from typing import Dict, Any, Tuple
 
 import numpy as np
@@ -34,6 +35,10 @@ class OptimizationComparator:
     def run_original_optimizer(self) -> Dict[str, Any]:
         """运行原始优化器"""
         print("\n[ORIGINAL] 运行原始test_cam_auto_priority_optimization.py...")
+
+        seed_value = 12345
+        random.seed(seed_value)
+        np.random.seed(seed_value)
 
         # 关闭执行日志
         set_execution_log_enabled(False)
@@ -70,6 +75,7 @@ class OptimizationComparator:
                 "target_satisfaction": 0.95,
                 "time_window": 1000.0,
                 "segment_mode": True,
+                "slack": 0.0,
                 "enable_random_slack": False
             },
             "resources": {
@@ -83,9 +89,21 @@ class OptimizationComparator:
             }
         }
 
+        seed_value = 12345
+        random.seed(seed_value)
+        np.random.seed(seed_value)
+
         # 运行优化
-        optimizer_interface = OptimizationInterface()
-        result = optimizer_interface.optimize_from_config(config)
+        previous_env = os.environ.get("AI_SCHEDULER_DISABLE_RANDOM_SLACK")
+        os.environ["AI_SCHEDULER_DISABLE_RANDOM_SLACK"] = "1"
+        try:
+            optimizer_interface = OptimizationInterface()
+            result = optimizer_interface.optimize_from_config(config)
+        finally:
+            if previous_env is None:
+                os.environ.pop("AI_SCHEDULER_DISABLE_RANDOM_SLACK", None)
+            else:
+                os.environ["AI_SCHEDULER_DISABLE_RANDOM_SLACK"] = previous_env
 
         return result
 
