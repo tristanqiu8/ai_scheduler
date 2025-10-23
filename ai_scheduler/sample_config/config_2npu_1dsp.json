@@ -1,0 +1,236 @@
+{
+  "optimization": {
+    "max_iterations": 40,
+    "max_time_seconds": 180,
+    "target_satisfaction": 0.90,
+    "time_window": 1500.0,
+    "segment_mode": true,
+    "enable_detailed_analysis": true,
+    "search_priority": true,
+    "log_level": "detailed",
+    "launch_strategy": "balanced"
+  },
+  "resources": {
+    "resources": [
+      {
+        "resource_id": "NPU_0",
+        "resource_type": "NPU",
+        "bandwidth": 160.0
+      },
+      {
+        "resource_id": "NPU_1",
+        "resource_type": "NPU",
+        "bandwidth": 160.0
+      },
+      {
+        "resource_id": "DSP_0",
+        "resource_type": "DSP",
+        "bandwidth": 160.0
+      }
+    ]
+  },
+  "scenario": {
+    "use_camera_tasks": false,
+    "scenario_name": "Mixed Task Types Scenario 2",
+    "description": "2NPU+1DSP配置，包含4种混合任务类型：5段NPU+DSP混合+长时NPU可分段+NPU→DSP依赖+纯DSP",
+    "tasks": [
+      {
+        "task_id": "COMPLEX_5SEG_TASK",
+        "name": "Complex5SegmentTask",
+        "priority": "HIGH",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "ADAPTIVE_SEGMENTATION",
+        "fps": 20.0,
+        "latency": 55.0,
+        "model": {
+          "segments": [
+            {
+              "resource_type": "NPU",
+              "duration_table": {
+                "80": 3.8,
+                "120": 3.2,
+                "160": 2.7
+              },
+              "segment_id": "complex_npu_seg1",
+              "power": 450.0,
+              "ddr": 20.0
+            },
+            {
+              "resource_type": "DSP",
+              "duration_table": {
+                "80": 4.5,
+                "120": 3.8,
+                "160": 3.1
+              },
+              "segment_id": "complex_dsp_seg1",
+              "power": 320.0,
+              "ddr": 18.0
+            },
+            {
+              "resource_type": "NPU",
+              "duration_table": {
+                "80": 2.9,
+                "120": 2.4,
+                "160": 2.0
+              },
+              "segment_id": "complex_npu_seg2",
+              "power": 380.0,
+              "ddr": 16.0
+            },
+            {
+              "resource_type": "DSP",
+              "duration_table": {
+                "80": 5.2,
+                "120": 4.3,
+                "160": 3.6
+              },
+              "segment_id": "complex_dsp_seg2",
+              "power": 340.0,
+              "ddr": 22.0
+            },
+            {
+              "resource_type": "NPU",
+              "duration_table": {
+                "80": 3.1,
+                "120": 2.6,
+                "160": 2.2
+              },
+              "segment_id": "complex_npu_seg3",
+              "power": 420.0,
+              "ddr": 19.0
+            }
+          ]
+        }
+      },
+      {
+        "task_id": "LONG_NPU_SEGMENTED",
+        "name": "LongNpuSegmented",
+        "priority": "NORMAL",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "FORCED_SEGMENTATION",
+        "fps": 25.0,
+        "latency": 42.0,
+        "model": {
+          "segments": [
+            {
+              "resource_type": "NPU",
+              "duration_table": {
+                "80": 12.5,
+                "120": 10.4,
+                "160": 8.8
+              },
+              "segment_id": "long_npu_seg1",
+              "power": 530.0,
+              "ddr": 30.0
+            },
+            {
+              "resource_type": "NPU",
+              "duration_table": {
+                "80": 7.8,
+                "120": 6.5,
+                "160": 5.4
+              },
+              "segment_id": "long_npu_seg2",
+              "power": 490.0,
+              "ddr": 25.0
+            }
+          ],
+          "cut_points": {
+            "long_npu_seg1": [
+              {
+                "op_id": "detection_backbone",
+                "perf_lut": {"80": 1.4, "120": 1.1, "160": 0.9},
+                "overhead_ms": 0.12
+              },
+              {
+                "op_id": "feature_pyramid",
+                "perf_lut": {"80": 1.2, "120": 1.0, "160": 0.8},
+                "overhead_ms": 0.1
+              }
+            ],
+            "long_npu_seg2": [
+              {
+                "op_id": "classification_head",
+                "perf_lut": {"80": 0.9, "120": 0.7, "160": 0.6},
+                "overhead_ms": 0.08
+              }
+            ]
+          }
+        }
+      },
+      {
+        "task_id": "NPU_DETECTION_TASK",
+        "name": "NpuDetectionTask",
+        "priority": "HIGH",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 35.0,
+        "latency": 30.0,
+        "model": {
+          "segments": [
+            {
+              "resource_type": "NPU",
+              "duration_table": {
+                "80": 6.2,
+                "120": 5.1,
+                "160": 4.2
+              },
+              "segment_id": "npu_detection",
+              "power": 480.0,
+              "ddr": 24.0
+            }
+          ]
+        }
+      },
+      {
+        "task_id": "DSP_TRACKING_TASK",
+        "name": "DspTrackingTask",
+        "priority": "HIGH",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 35.0,
+        "latency": 25.0,
+        "dependencies": ["NPU_DETECTION_TASK"],
+        "model": {
+          "segments": [
+            {
+              "resource_type": "DSP",
+              "duration_table": {
+                "80": 4.5,
+                "120": 3.7,
+                "160": 3.1
+              },
+              "segment_id": "dsp_tracking",
+              "power": 280.0,
+              "ddr": 15.0
+            }
+          ]
+        }
+      },
+      {
+        "task_id": "PURE_DSP_AUDIO",
+        "name": "PureDspAudio",
+        "priority": "LOW",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 60.0,
+        "latency": 16.0,
+        "model": {
+          "segments": [
+            {
+              "resource_type": "DSP",
+              "duration_table": {
+                "80": 1.8,
+                "120": 1.5,
+                "160": 1.2
+              },
+              "segment_id": "pure_dsp_audio",
+              "power": 140.0,
+              "ddr": 5.0
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

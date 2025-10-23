@@ -1,0 +1,98 @@
+{
+  "optimization": {
+    "max_iterations": 1,
+    "max_time_seconds": 5,
+    "target_satisfaction": 1.0,
+    "time_window": 80.0,
+    "segment_mode": true,
+    "enable_detailed_analysis": false,
+    "search_priority": false,
+    "log_level": "normal",
+    "enable_random_slack": false,
+    "launch_strategy": "eager"
+  },
+  "resources": {
+    "resources": [
+      { "resource_id": "NPU_0", "resource_type": "NPU", "bandwidth": 60.0 }
+    ]
+  },
+  "scenario": {
+    "use_camera_tasks": false,
+    "scenario_name": "Eager Launch Profile Demo",
+    "description": "Three tasks with explicit launch offsets under eager strategy.",
+    "tasks": [
+      {
+        "task_id": "alpha",
+        "name": "alpha",
+        "priority": "HIGH",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 50.0,
+        "latency": 15.0,
+        "launch_profile": {
+          "offset_ms": 0.0,
+          "respect_dependencies": false
+        },
+        "model": {
+          "segments": [
+            {
+              "resource_type": "NPU",
+              "segment_id": "alpha_npu",
+              "duration_table": { "60": 5.0 },
+              "power": 0.0,
+              "ddr": 0.0
+            }
+          ]
+        }
+      },
+      {
+        "task_id": "beta",
+        "name": "beta",
+        "priority": "NORMAL",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 40.0,
+        "latency": 20.0,
+        "launch_profile": {
+          "offset_ms": 6.0,
+          "respect_dependencies": false
+        },
+        "model": {
+          "segments": [
+            {
+              "resource_type": "NPU",
+              "segment_id": "beta_npu",
+              "duration_table": { "60": 6.0 },
+              "power": 0.0,
+              "ddr": 0.0
+            }
+          ]
+        }
+      },
+      {
+        "task_id": "gamma",
+        "name": "gamma",
+        "priority": "LOW",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 25.0,
+        "latency": 30.0,
+        "launch_profile": {
+          "offset_ms": 12.0,
+          "respect_dependencies": false
+        },
+        "model": {
+          "segments": [
+            {
+              "resource_type": "NPU",
+              "segment_id": "gamma_npu",
+              "duration_table": { "60": 7.5 },
+              "power": 0.0,
+              "ddr": 0.0
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

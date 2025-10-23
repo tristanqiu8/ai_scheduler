@@ -38,7 +38,8 @@ def get_requirements():
         "matplotlib>=3.3.0",
         "plotly>=4.14.0",
         "python-dateutil>=2.8.0",
-        "requests>=2.25.0"
+        "requests>=2.25.0",
+        "protobuf>=4.21.0",
     ]
 
 setup(
@@ -73,7 +74,9 @@ setup(
     package_data={
         "ai_scheduler": [
             "sample_config/*.json",
-            "NNScheduler/interface/*.json"
+        ],
+        "NNScheduler": [
+            "interface/*.json",
         ],
     },
 

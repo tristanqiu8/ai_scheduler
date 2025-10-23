@@ -1,0 +1,186 @@
+{
+  "optimization": {
+    "max_iterations": 30,
+    "max_time_seconds": 120,
+    "target_satisfaction": 0.90,
+    "time_window": 200.0,
+    "segment_mode": true,
+    "enable_detailed_analysis": true,
+    "search_priority": true,
+    "log_level": "normal",
+    "launch_strategy": "eager"
+  },
+  "resources": {
+    "resources": [
+      { "resource_id": "NPU_0", "resource_type": "NPU", "bandwidth": 80.0 },
+      { "resource_id": "DSP_0", "resource_type": "DSP", "bandwidth": 80.0 }
+    ]
+  },
+  "scenario": {
+    "use_camera_tasks": false,
+    "scenario_name": "4K30 DNR with TK",
+    "description": "4K30 Denoise case with TK on",
+    "tasks": [
+      {
+        "task_id": "T1",
+        "name": "NNMA",
+        "priority": "HIGH",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 30.0,
+        "latency": 33.3,
+        "model": {
+          "segments": [
+            {"resource_type": "NPU", "duration_table": {"80": 2.100}, "segment_id": "npu_s0", "power": 0.0, "ddr": 9.65},
+            {"resource_type": "NPU", "duration_table": {"80": 1.940}, "segment_id": "npu_s1", "power": 0.0, "ddr": 0},
+            {"resource_type": "NPU", "duration_table": {"80": 1.447}, "segment_id": "npu_s2", "power": 0.0, "ddr": 0},
+            {"resource_type": "NPU", "duration_table": {"80": 1.955}, "segment_id": "npu_s3", "power": 0.0, "ddr": 0},
+            {"resource_type": "NPU", "duration_table": {"80": 1.940}, "segment_id": "npu_s4", "power": 0.0, "ddr": 0},
+            {"resource_type": "NPU", "duration_table": {"80": 1.426}, "segment_id": "npu_s5", "power": 0.0, "ddr": 0},
+            {
+              "resource_type": "DSP",
+              "duration_table": {"20": 0.008, "40": 0.009, "80": 0.01, "120": 0.01},
+              "segment_id": "postprocess",
+              "power": 0.0,
+              "ddr": 0.0
+            }
+          ]
+        }
+      },
+      {
+        "task_id": "T2",
+        "name": "MOTR",
+        "priority": "HIGH",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 30.0,
+        "latency": 33.3,
+        "model": {
+          "segments": [
+            {"resource_type": "NPU", "duration_table": {"80": 0.48}, "segment_id": "npu_s0", "power": 0.0, "ddr": 40.1},
+            {"resource_type": "DSP", "duration_table": {"80": 0.89}, "segment_id": "dsp_s0", "power": 0.0, "ddr": 0.0},
+            {"resource_type": "NPU", "duration_table": {"80": 0.74}, "segment_id": "npu_s1", "power": 0.0, "ddr": 0.0},
+            {"resource_type": "NPU", "duration_table": {"80": 7.98}, "segment_id": "npu_s2", "power": 0.0, "ddr": 0.0},
+            {"resource_type": "DSP", "duration_table": {"80": 0.89}, "segment_id": "dsp_s2", "power": 0.0, "ddr": 0.0},
+            {"resource_type": "NPU", "duration_table": {"80": 0.73}, "segment_id": "npu_s3", "power": 0.0, "ddr": 0.0},
+            {"resource_type": "DSP", "duration_table": {"80": 0.89}, "segment_id": "dsp_s3", "power": 0.0, "ddr": 0.0},
+            {"resource_type": "NPU", "duration_table": {"80": 0.31}, "segment_id": "npu_s4", "power": 0.0, "ddr": 0.0},
+            {"resource_type": "DSP", "duration_table": {"80": 0.89}, "segment_id": "dsp_s3", "power": 0.0, "ddr": 0.0}
+          ],
+          "cut_points": {
+            "npu_s2": [
+              {"op_id": "cut1", "perf_lut": {"80": 2.5}, "overhead_ms": 0.0},
+              {"op_id": "cut2", "perf_lut": {"80": 2.5}, "overhead_ms": 0.0}
+            ]
+          }
+        }
+      },
+      {
+        "task_id": "T3",
+        "name": "qim",
+        "priority": "HIGH",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 30.0,
+        "latency": 33.3,
+        "dependencies": ["T7"],
+        "model": {
+          "segments": [
+            {"resource_type": "DSP", "duration_table": {"80": 0.754}, "segment_id": "dsp_sub0", "power": 0.0, "ddr": 1.988},
+            {"resource_type": "DSP", "duration_table": {"80": 0.178}, "segment_id": "dsp_sub1", "power": 0.0, "ddr": 0.0},
+            {"resource_type": "NPU", "duration_table": {"80": 0.636}, "segment_id": "npu_sub0", "power": 0.0, "ddr": 0.0}
+          ]
+        }
+      },
+      {
+        "task_id": "T4",
+        "name": "parsing",
+        "priority": "NORMAL",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 30.0,
+        "latency": 33.3,
+        "model": {
+          "segments": [
+            {"resource_type": "DSP", "duration_table": {"80": 1.845}, "segment_id": "dsp_sub0", "power": 0.0, "ddr": 6.895},
+            {"resource_type": "NPU", "duration_table": {"80": 1.562}, "segment_id": "npu_sub0", "power": 0.0, "ddr": 0.0},
+            {"resource_type": "DSP", "duration_table": {"80": 0.500}, "segment_id": "dsp_sub1", "power": 0.0, "ddr": 0.0}
+          ]
+        }
+      },
+      {
+        "task_id": "T5",
+        "name": "vmask",
+        "priority": "NORMAL",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 30.0,
+        "latency": 33.3,
+        "model": {
+          "segments": [
+            {"resource_type": "NPU", "duration_table": {"80": 2.803}, "segment_id": "main", "power": 0.0, "ddr": 11.3},
+            {"resource_type": "DSP", "duration_table": {"80": 0.291}, "segment_id": "dsp_sub0", "power": 0.0, "ddr": 0.0}
+          ]
+        }
+      },
+      {
+        "task_id": "T6",
+        "name": "motr_infer_reid_vec.reID_person",
+        "priority": "NORMAL",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 30.0,
+        "latency": 33.3,
+        "dependencies": ["T2"],
+        "model": {
+          "segments": [
+            {"resource_type": "NPU", "duration_table": {"80": 0.998}, "segment_id": "main", "power": 0.0, "ddr": 2.02}
+          ]
+        }
+      },
+      {
+        "task_id": "T7",
+        "name": "Pose2d",
+        "priority": "NORMAL",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 30.0,
+        "latency": 33.3,
+        "dependencies": ["T2"],
+        "model": {
+          "segments": [
+            {"resource_type": "NPU", "duration_table": {"80": 1.044}, "segment_id": "main", "power": 0.0, "ddr": 2.497}
+          ]
+        }
+      },
+      {
+        "task_id": "T8",
+        "name": "face_embed",
+        "priority": "NORMAL",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 10.0,
+        "latency": 100.0,
+        "model": {
+          "segments": [
+            {"resource_type": "NPU", "duration_table": {"80": 3.643}, "segment_id": "main", "power": 0.0, "ddr": 16.08}
+          ]
+        }
+      },
+      {
+        "task_id": "T9",
+        "name": "face_quality",
+        "priority": "NORMAL",
+        "runtime_type": "ACPU_RUNTIME",
+        "segmentation_strategy": "NO_SEGMENTATION",
+        "fps": 10.0,
+        "latency": 100.0,
+        "model": {
+          "segments": [
+            {"resource_type": "NPU", "duration_table": {"80": 0.618}, "segment_id": "main", "power": 0.0, "ddr": 1.309}
+          ]
+        }
+      }
+    ]
+  }
+}
