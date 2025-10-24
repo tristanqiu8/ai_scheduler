@@ -16,7 +16,7 @@ from .optimization_api import (
     load_sample_config,
 )
 
-APP_DESCRIPTION = "A heterogenous neural network simulator and scheduling optimizer"
+APP_DESCRIPTION = "A heterogenous AI tasks simulator and scheduling optimizer"
 APP_TEAM = "AIC"
 APP_MAINTAINER = "Tristan.Qiu, Xiong.Guo, Neal.Nie"
 

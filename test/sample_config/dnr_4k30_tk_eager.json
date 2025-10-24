@@ -100,6 +100,10 @@
         "segmentation_strategy": "NO_SEGMENTATION",
         "fps": 30.0,
         "latency": 33.3,
+        "launch_profile": {
+          "offset_ms": 8.0,
+          "respect_dependencies": false
+        },
         "model": {
           "segments": [
             {"resource_type": "DSP", "duration_table": {"80": 1.845}, "segment_id": "dsp_sub0", "power": 0.0, "ddr": 6.895},

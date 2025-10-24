@@ -1,18 +1,22 @@
 # AI Scheduler 用户指南
 
-欢迎来到 AI Scheduler 用户指南！本文面向首次接触该引擎的用户，帮助你从 wheel 包快速安装、运行预置 JSON 配置、理解输入格式，并正确选择各类发射（launch）模式。
+AI Scheduler 是一套针对多任务神经网络部署的场景级调度，仿真与优化工具，它以NPU为调度资源核心，能够在NPU、DSP、ISP(开发中)、IP(如VCR，开发中)等异构资源之间协调任务执行，并输出可视化的时间线与统计数据。它非常轻便，简洁，快速，可帮助你分析当前NN场景流水仿真的一些潜在痛点，可在规划阶段帮助排查极限场景的NN风险以及在交付阶段与实际上板抓的流水图相互配合——协助挖掘NN场景的优化方向，痛点定位，最终提高整体任务完成质量和NPU吞吐量。
+
+我们的愿景是每个人都可以看到自己的NN场景级调度，让场景级调度仿真变得轻而易举！
+
+欢迎来到 AI Scheduler 用户指南！本文面向首次接触该工具的用户，帮助你从 wheel 包快速安装、运行预置 JSON 配置、理解输入格式，并正确选择各类发射（launch）模式。
 
 ## 1. 环境与安装
 
 ### 1.1 环境要求
 
-- Python 3.8 及以上版本。
+- Python 3.8 及以上版本，Ubuntu OS。
 - 推荐在虚拟环境（`venv`、`conda`）中安装。
 
 ### 1.2 安装 wheel 并验证
 
 ```bash
-pip install xxxxx
+pip install ai_scheduler-<version number>-py3-none-any.whl
 ```
 
 安装完成后，`ai-scheduler` 命令行工具与 `ai_scheduler` Python 包会同时就绪。可通过以下命令快速验证：
@@ -59,6 +63,7 @@ ai-scheduler run ./configs/my_scenario.json --output artifacts_demo/my_scenario
 | `dnr_4k30_tk_eager.json` | 4K/30fps 视频降噪，`eager` 策略 | 高吞吐场景的端到端延迟评估 |
 | `dnr_4k30_tk_balance.json` | 与上例相同场景，`balanced` 策略 | 对比不同发射策略满意率 |
 | `config_fixed_launch_example.json` | 自定义发射相位 + 依赖声明 | 研究 `fixed` / `sync` 行为 |
+| `dnr_4k30_tk_eager_launch_profile.json` | 在 4K30 DNR 场景中演示 `launch_profile` 延迟发射 | 观察 `eager` 策略下的相位调节 |
 
 > 小贴士：直接使用 `sample:<name>.json` 前缀即可运行内置样例，无需手动复制。
 
@@ -78,7 +83,7 @@ ai-scheduler run ./configs/my_scenario.json --output artifacts_demo/my_scenario
 
 - `max_iterations` (int)：最大迭代次数，决定搜索深度。
 - `max_time_seconds` (float)：总运行时限，单位秒。
-- `time_window` (float)：时间线窗口长度，影响可视化范围。
+- `time_window` (float)：时间线窗口长度，单位毫秒，影响可视化范围。
 - `launch_strategy` (string)：任务发射模式，详见第 4 章。
 - `search_priority` (bool)：是否执行优先级搜索；设为 `false` 时直接使用 `scenario.tasks[*].priority`。
 - `enable_random_slack` (bool)：首段随机扰动开关，默认为 true。
@@ -108,9 +113,10 @@ ai-scheduler run ./configs/my_scenario.json --output artifacts_demo/my_scenario
   - `task_id`：唯一任务标识。
   - `priority`：`HIGH` / `MEDIUM` / `LOW` 等等级，影响全局排序。
   - `fps` 与 `latency`：输入帧率与延迟预算。
-  - `launch_profile`：可选发射相位设置，支持：
-    - `offset_ms`：首帧偏移（毫秒）。
-    - `respect_dependencies`：是否等待依赖任务完成。
+- `launch_profile`：可选发射相位设置，支持：
+  - `offset_ms`：首帧偏移（毫秒）。
+  - `respect_dependencies`：是否等待依赖任务完成。
+  - 示例：`dnr_4k30_tk_eager_launch_profile.json` 中的 `parsing` 任务将 `offset_ms` 设置为 12ms，以模拟后移发射。
   - `model.segments`：任务片段序列，按执行资源划分：
     ```json
     {
@@ -149,7 +155,7 @@ ai-scheduler run ./configs/my_scenario.json --output artifacts_demo/my_scenario
 
 - `optimization_result_*.json`：包含搜索过程统计与满意率。
 - `optimized_priority_config_*.json`：记录最优优先级配置，可直接复用。
-- `optimized_schedule_chrome_trace_*.json`：可导入 Chrome Tracing (`chrome://tracing`)。
+- `optimized_schedule_chrome_trace_*.json`：可导入 Chrome Tracing (`chrome://tracing`或者`https://ui.perfetto.dev/`)。
 - `optimized_schedule_timeline_*.png`：时间线可视化，依赖 `matplotlib`。
 
 如需自定义产物根目录，可在运行前设置环境变量 `AI_SCHEDULER_ARTIFACTS_DIR=<path>`。不需要图像输出时，可设置 `AI_SCHEDULER_DISABLE_VISUALS=1`。
@@ -196,4 +202,4 @@ print("任务数量:", summary["task_count"], "发射策略:", summary["launch_s
 - 将自定义场景纳入自动化回归：`pytest test/NNScheduler/test_optimization_comparison.py -k <scenario>`。
 - 发布前检查 `dist/` 内的 wheel 是否包含 `ai_scheduler`、`NNScheduler` 目录及 `sample_config` 数据。
 
-如需更多背景与开发者向信息，请联系AIC开发者Tristan.Qiu。
+如需更多背景与未来需求信息，请联系AIC开发者Tristan.Qiu, Xiong.Guo, Neal.Nie。
